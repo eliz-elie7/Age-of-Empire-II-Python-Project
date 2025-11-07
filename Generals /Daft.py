@@ -1,7 +1,7 @@
 from .General import General
 #from core.player import Player
 from Units import unit 
-#from core.map import Map 
+import math
 
 """Convention d'ordres pour tous les généraux
   {
@@ -48,14 +48,35 @@ class Daft(General):
             if unit.distance_to(first_enemy) <= unit.get_range():  
                 return {'type': 'attack', 'unit': unit, 'target': first_enemy}
             else:
-                return {'type': 'move', 'unit': unit, 'position': (first_enemy.x, first_enemy.y)}  
+                # Calcul de position d'approche intelligente
+                dx = first_enemy.x - unit.x
+                dy = first_enemy.y - unit.y
+                distance = unit.distance_to(first_enemy)
+                
+                # S'approcher sans collision avec une marge
+                approach_distance = distance - unit.get_range() + 10  # 10 pixels de marge
+                move_distance = min(unit.get_speed(), approach_distance)
+                
+                target_x = unit.x + (dx / distance) * move_distance
+                target_y = unit.y + (dy / distance) * move_distance
+                
+                return {'type': 'move', 'unit': unit, 'position': (target_x, target_y)}
         else:
             enemy_units = self.get_enemy(all_players, current_player)
             closest_enemy = self.closest_enemy(unit, enemy_units)
             if not closest_enemy:
                 return {'type': 'hold', 'unit': unit}
             else:
-                return {'type': 'move', 'unit': unit, 'position': (closest_enemy.x, closest_enemy.y)}
+                # Calcul de position d'approche pour l'ennemi le plus proche
+                dx = closest_enemy.x - unit.x
+                dy = closest_enemy.y - unit.y
+                distance = unit.distance_to(closest_enemy)
+                
+                move_distance = min(unit.get_speed(), distance)
+                target_x = unit.x + (dx / distance) * move_distance
+                target_y = unit.y + (dy / distance) * move_distance
+                
+                return {'type': 'move', 'unit': unit, 'position': (target_x, target_y)}
 
     def _process_all_units(self, myunits, all_players, current_player):
         orders = []
