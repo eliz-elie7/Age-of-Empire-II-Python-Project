@@ -1,6 +1,7 @@
 from .General import General
-#from core.player import Player
-from Units import unit 
+from src.core import player
+from src.core import map
+from src.core import units
 import math
 
 """Convention d'ordres pour tous les généraux
