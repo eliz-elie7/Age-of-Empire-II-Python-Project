@@ -49,7 +49,11 @@ class Unit:
         raise NotImplementedError
     
     def get_speed(self) -> float:
-        """Vitesse de déplacement"""
+        """Vitesse de déplacement en pixels/seconde"""
+        raise NotImplementedError
+    
+    def get_collision_radius(self) -> float:
+        """Retourne le rayon de collision en pixels"""
         raise NotImplementedError
     
     def get_line_of_sight(self) -> int:
