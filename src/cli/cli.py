@@ -1,22 +1,20 @@
 """
-CLI (Command Line Interface) du projet Medievail.
+CLI (Command Line Interface) du projet MedievAIl.
 
 Permet de :
  - Lancer un combat entre deux armées
- - Générer un scénario (Lanchester, skirmish, mirror…)
- - Exécuter des benchmarks
- - Visualiser les résultats (optionnel, en plugins)
-
-Usage :
-    python -m medievail.cli --scenario lanchester --type balanced --size 200
+ - Générer un scénario
+ - Simuler une bataille complète
 """
 
 from __future__ import annotations
 import argparse
 import sys
+import time
 
-from medievail.core.scenario import get_scenario
-from medievail.core.battle_engine import BattleEngine
+from src.core.scenario import get_scenario
+from src.core.battle import Battle
+from src.core.map import Map
 
 
 # ============================================================
@@ -26,10 +24,9 @@ from medievail.core.battle_engine import BattleEngine
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="medievail",
-        description="Medievail — moteur de simulation de batailles médiévales"
+        description="MedievAIl — moteur de simulation de batailles médiévales"
     )
 
-    # Choix du scénario
     parser.add_argument(
         "--scenario", "-s",
         type=str,
@@ -37,55 +34,59 @@ def build_parser() -> argparse.ArgumentParser:
         help="Nom du scénario (lanchester, mirror, skirmish)"
     )
 
-    # Type interne (ex : balanced/skewed pour Lanchester)
     parser.add_argument(
         "--type", "-t",
         type=str,
         default="balanced",
-        help="Type de scénario interne (dépend du scénario choisi)"
+        help="Type interne du scénario"
     )
 
-    # Taille d’une armée
     parser.add_argument(
         "--size",
         type=int,
         default=100,
-        help="Nombre total d’unités par camp"
+        help="Nombre d’unités par camp"
     )
 
-    # Verbosity (affichage du déroulement complet)
     parser.add_argument(
         "--verbose", "-v",
         action="store_true",
-        help="Affiche le déroulement complet du combat"
+        help="Affiche la progression du combat"
     )
 
-    # Mode stats (ne fait que simuler plusieurs fois)
     parser.add_argument(
-        "--repeat", "-r",
-        type=int,
-        default=1,
-        help="Nombre de simulations successives"
+        "--logic-dt",
+        type=float,
+        default=0.05,
+        help="Pas de temps logique"
+    )
+
+    parser.add_argument(
+        "--max-time",
+        type=float,
+        default=120.0,
+        help="Durée max de la bataille (secondes simulées)"
     )
 
     return parser
 
 
 # ============================================================
-# Résultats (affichages console)
+# Affichage des résultats
 # ============================================================
 
-def print_battle_result(result, n=None):
-    """
-    Affiche un résumé propre du résultat d'une bataille.
-    """
-    prefix = f"[RUN {n}] " if n is not None else ""
+def print_battle_summary(battle: Battle):
+    print("\n" + "=" * 50)
+    print("BATTLE FINISHED")
+    print("=" * 50)
+    print(f"Simulated time : {battle.time:.2f}s")
 
-    print(prefix + "-" * 40)
-    print(prefix + f"Winner : {result.winner.name}")
-    print(prefix + f"Rounds  : {result.rounds}")
-    print(prefix + f"Remaining units : {len(result.winner.remaining_units)}")
-    print(prefix + "-" * 40)
+    if battle.winner:
+        print(f"Winner         : {battle.winner.name}")
+        print(f"Remaining units: {len(battle.winner.squad)}")
+    else:
+        print("Result         : DRAW (time limit reached)")
+    print("=" * 50)
 
 
 # ============================================================
@@ -96,27 +97,46 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # Récupération du scénario demandé
+    # Récupération du scénario
     try:
         scenario_fn = get_scenario(args.scenario)
     except ValueError as e:
         print(f"Erreur : {e}")
         sys.exit(1)
 
-    # Génération des deux armées
+    # Génération des joueurs
     try:
-        armyA, armyB = scenario_fn(args.type, args.size)
+        playerA, playerB = scenario_fn(args.type, args.size)
     except Exception as e:
-        print(f"Erreur lors de la génération du scénario : {e}")
+        print(f"Erreur scénario : {e}")
         sys.exit(1)
 
-    # ENGINE
-    engine = BattleEngine(verbose=args.verbose)
+    # Création de la map
+    world_map = Map(width=120, height=120)
 
-    # Simulations (repeat)
-    for i in range(1, args.repeat + 1):
-        result = engine.run(armyA.clone(), armyB.clone())
-        print_battle_result(result, i if args.repeat > 1 else None)
+    # Création de la bataille
+    battle = Battle(
+        players=[playerA, playerB],
+        world_map=world_map,
+        logic_dt=args.logic_dt,
+        max_time=args.max_time
+    )
+
+    # Boucle principale
+    while not battle.finished:
+        state = battle.update()
+
+        if args.verbose and state:
+            print(
+                f"t={state['game_time']:.2f}s | "
+                + " | ".join(
+                    f"{p['name']}:{p['alive_units']}"
+                    for p in state["players"]
+                )
+            )
+
+    # Résumé final
+    print_battle_summary(battle)
 
     return 0
 
