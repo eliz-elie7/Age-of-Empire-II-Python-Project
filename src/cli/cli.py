@@ -128,7 +128,7 @@ def main(argv=None):
 
         if args.verbose and state:
             print(
-                f"t={state['game_time']:.2f}s | "
+                f"t={state['meta']['time']:.2f}s | "
                 + " | ".join(
                     f"{p['name']}:{p['alive_units']}"
                     for p in state["players"]
