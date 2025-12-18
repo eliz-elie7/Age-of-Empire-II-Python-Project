@@ -91,6 +91,7 @@ class Battle:
         # ===============================
         #     Construction du STATE
         # ===============================
+        """
         state_players = []
         for p in self.players:
             state_players.append({
@@ -115,3 +116,38 @@ class Battle:
             "finished": self.finished,
             "winner": self.winner.name if self.winner else None
         }
+        """
+
+        # ===============================
+        #     Construction du STATE
+        # ===============================
+        state = {
+            "meta": {
+                "time": self.time,
+                "max_time": self.max_time,
+                "finished": self.finished,
+                "winner": self.winner.name if self.winner else None
+            },
+            "players": [],
+            "units": []
+        }
+
+        for p in self.players:
+            alive = [u for u in p.squad if u.is_alive]
+            state["players"].append({
+                "name": p.name,
+                "alive_units": len(alive),
+                "total_units": len(p.squad)
+            })
+
+            for u in alive:
+                state["units"].append({
+                    "id": id(u),
+                    "owner": p.name,
+                    "type": u.__class__.__name__,
+                    "hp": u.current_hp,
+                    "position": (u.x, u.y),
+                    "order": u.current_order["type"] if u.current_order else None
+                })
+
+        return state
