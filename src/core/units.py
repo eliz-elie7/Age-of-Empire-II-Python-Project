@@ -128,6 +128,21 @@ class Unit:
             self.y += 1
         elif self.y > target_y:
             self.y -= 1
+    
+    def order_data(self) -> dict:
+        """Retourne les données de l'unité pour l'ordre"""
+        return {
+            'type': self.__class__.__name__,
+            'x': self.x,
+            'y': self.y,
+            'player': self.player.name,
+            'current_hp': self.current_hp,
+            'is_alive': self.is_alive
+        }
+        
+    def needs_new_order(self) -> bool:
+        """Détermine si l'unité a besoin d'un nouvel ordre"""
+        return self.target is None or not self.target.is_alive
 
 
 class Pikeman(Unit):
@@ -152,7 +167,7 @@ class Pikeman(Unit):
         return 3.0
     
     def get_speed(self) -> float:
-        return 1.0
+        return 80.0
     
     def get_line_of_sight(self) -> int:
         return 4
@@ -160,6 +175,9 @@ class Pikeman(Unit):
     def get_symbol(self) -> str:
         """Symbole pour affichage terminal"""
         return 'P'
+    
+    def get_collision_radius(self):
+        return 5.0
     
     def get_bonus_damage(self, target: Unit) -> int:
         """Bonus massif contre cavalerie"""
