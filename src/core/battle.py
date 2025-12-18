@@ -1,4 +1,4 @@
-# game.py
+# battle.py
 import time
 import random
 from .player import Player
