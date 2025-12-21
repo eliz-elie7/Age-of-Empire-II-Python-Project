@@ -2,7 +2,7 @@
 import os
 import pygame
 from typing import Tuple
-from src.vis.gui_view import View
+from src.vis.view_base import View
 from src.core.units import TILE
 
 # ================== PATHS ==================
