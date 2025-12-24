@@ -1,131 +1,179 @@
 import time
 import random
-import math
+from typing import List, Dict, Any
+
+from .player import Player
+from .map import Map
+from .history import add_fight_history 
+from .html_generator import generate_snapshot_html
 
 class Battle:
-    def __init__(self, players, world_map=None, dt=0.1, max_turns=1000, log=True):
+    def __init__(self, players, world_map, logic_dt=0.05, max_time=60.0):
         self.players = players
+        self.map = world_map
         self.world_map = world_map
-        self.dt = dt
-        self.max_turns = max_turns
-        self.log = log
+        self.logic_dt = logic_dt
+        self.max_time = max_time
         
-        # État du jeu
-        self.turn = 0
-        self.game_time = 0.0
+        # --- CORRECTION ICI : On utilise game_time partout ---
+        self.game_time = 0.0 
+        
         self.finished = False
         self.winner = None
-        self.history = []
+        self.paused = False
+        self.history_saved = False 
 
-    def step(self):
-        """Exécute une frame de simulation"""
-        self.turn += 1
-        self.game_time += self.dt
-        
+        # Infos de départ
+        self.start_info = {
+            p.name: {
+                "ai": p.general.__class__.__name__,
+                "unit_count": len(p.squad)
+            }
+            for p in players
+        }
 
-        # PHASE 1: Ordres pour unités qui en ont besoin
-        all_orders = []
-        for player in self.players:
-            units_needing_orders = [u for u in player.alive_units() if u.needs_new_orders]
-            
-            if units_needing_orders:
-                orders = player.general.give_orders(player, self.players, self.world_map, units_needing_orders)
-                all_orders.extend(orders)
+    def export_state_html(self):
+        print(f"📸 Snapshot HTML généré à t={self.game_time:.2f}s")
+        try:
+            generate_snapshot_html(self.players, self.game_time)
+            self.paused = True 
+        except Exception as e:
+            print(f"❌ Erreur HTML : {e}")
 
-        
-        # PHASE 2: Assigner les ordres aux unités
-        random.shuffle(all_orders)
-        for order in all_orders:
-            unit = order['unit']
-            params = {}
-            for k, v in order.items():
-               if k != "unit" and k != "type":
-                  params[k] = v
-        
-        # PHASE 3: Mise à jour des unités
-        for player in self.players:
-            for unit in player.alive_units():
-                unit.update(self, self.dt)
-
-        
-        # PHASE 4: Nettoyage des unités mortes
-        for player in self.players:
-            player.remove_dead_units()
-
-        self._check_end_condition()
-
-    def _check_end_condition(self):
-        """Vérifie si la bataille est terminée"""
-        alive_players = [p for p in self.players if len(p.alive_units()) > 0]
-        
-        if len(alive_players) <= 1:
-            self.finished = True
-            self.winner = alive_players[0] if alive_players else None
-        elif self.turn >= self.max_turns:
-            self.finished = True
-
-    def run(self):
-       """Boucle principale RTS"""
-       start_time = time.time()
-       last_tick = start_time
-    
-       while not self.finished:
-          current_time = time.time()
-          elapsed = current_time - last_tick
-        
-          if elapsed >= self.dt:
-             self.step()
-             last_tick = current_time
-        
-          time.sleep(0.001)
-    
-       end_time = time.time()
-       duration = end_time - start_time
-
-    # ⭐ Ajout historique COMPLÈTEMENT DANS run() ⭐
-       from history import add_fight_history
-
-       p1 = self.players[0].name
-       p2 = self.players[1].name
-       winner = self.winner.name if self.winner else "Aucun"
-
-       details = (
-          f"{p1}: {len(self.players[0].alive_units())} unités restantes — "
-          f"{p2}: {len(self.players[1].alive_units())} unités restantes"
-    )
-
-       add_fight_history(
-          p1,
-          p2,
-          int(duration),
-          winner,
-          details
-    )
-
-       return duration
-
-
-
-    def all_units(self):
-        """Retourne toutes les unités vivantes"""
+    def collect_units(self):
         units = []
-        for player in self.players:
-            units.extend(player.alive_units())
+        for p in self.players:
+            units.extend(p.squad)
         return units
 
-    def get_game_state(self):
-        """Retourne l'état du jeu pour la visualisation"""
+    def force_decision_by_points(self):
+        """Calcule les PV restants pour désigner un vainqueur au temps."""
+        hp_p1 = sum(u.current_hp for u in self.players[0].squad if u.is_alive)
+        hp_p2 = sum(u.current_hp for u in self.players[1].squad if u.is_alive)
+
+        print(f"⌛ TEMPS ÉCOULÉ ! Décision : {self.players[0].name}={int(hp_p1)}HP vs {self.players[1].name}={int(hp_p2)}HP")
+
+        if hp_p1 > hp_p2:
+            self.winner = self.players[0]
+        elif hp_p2 > hp_p1:
+            self.winner = self.players[1]
+        else:
+            self.winner = None 
+
+    def save_to_history(self):
+        """Sauvegarde le résultat dans history.html"""
+        if self.history_saved: return
+        
+        winner_name = self.winner.name if self.winner else "MATCH NUL"
+        
+        # Liste de tuples : (Symbole, Nom_Equipe)
+        survivors_data = []
+        for p in self.players:
+            for u in p.squad:
+                if u.is_alive:
+                    survivors_data.append((u.get_symbol(), p.name))
+        
+        try:
+            p1 = self.players[0]
+            p2 = self.players[1]
+            
+            add_fight_history(
+                p1.name, 
+                p2.name,
+                self.start_info[p1.name]['ai'], 
+                self.start_info[p2.name]['ai'],
+                self.start_info[p1.name]['unit_count'], 
+                self.start_info[p2.name]['unit_count'],
+                winner_name, 
+                self.game_time, # Utilisation correcte de game_time
+                survivors_data 
+            )
+            print(f"✔ Historique sauvegardé : Vainqueur {winner_name}")
+            self.history_saved = True
+        except Exception as e:
+            print("❌ Erreur sauvegarde historique :", e)
+
+    def update(self):
+        if self.finished or self.paused:
+            return None
+
+        # 1. Vérification du Temps
+        self.game_time += self.logic_dt # Incrémentation correcte
+        
+        if self.game_time >= self.max_time:
+            self.force_decision_by_points()
+            self.finished = True
+            self.save_to_history()
+            return self.get_state_dict()
+
+        # 2. Update IA et Unités
+        all_units = self.collect_units()
+        random.shuffle(all_units) 
+
+        # IA Logic
+        for p in self.players:
+            units_needing_orders = [u for u in p.squad if u.needs_order()]
+            if not units_needing_orders: continue
+            try:
+                orders = p.general.give_orders(p, self.players, self.map, units_needing_orders)
+            except: orders = []
+
+            if orders:
+                for order in orders:
+                    if order and 'unit' in order and order['unit'].is_alive:
+                        u = order['unit']
+                        if order['type'] == 'attack': u.set_order('attack', {'target': order.get('target')})
+                        elif order['type'] == 'move': u.set_order('move', {'position': order.get('position')})
+                        else: u.clear_order()
+
+        # Physique
+        for u in all_units:
+            if u.is_alive:
+                u.update(self, self.logic_dt)
+
+        # Nettoyage
+        for p in self.players:
+            p.squad = [u for u in p.squad if u.is_alive]
+
+        # 3. Vérification KO
+        alive_counts = [len(p.squad) for p in self.players]
+        
+        if alive_counts[0] == 0 and alive_counts[1] > 0:
+            self.winner = self.players[1]
+            self.finished = True
+        elif alive_counts[1] == 0 and alive_counts[0] > 0:
+            self.winner = self.players[0]
+            self.finished = True
+        elif alive_counts[0] == 0 and alive_counts[1] == 0:
+            self.finished = True
+
+        if self.finished:
+            self.save_to_history()
+
+        return self.get_state_dict()
+
+    def get_state_dict(self):
+        state_players = []
+        for p in self.players:
+            state_players.append({
+                "name": p.name,
+                "alive_units": len([u for u in p.squad if u.is_alive]),
+                "units": [
+                    {
+                        "symbol": u.get_symbol(),
+                        "x": u.x,
+                        "y": u.y,
+                        "hp": u.current_hp,
+                        "order": getattr(u, 'current_order', 'None')
+                    }
+                    for u in p.squad
+                ]
+            })
+
         return {
-            'game_time': self.game_time,
-            'turn': self.turn,
-            'players': [
-                {
-                    'name': p.name,
-                    'alive_units': len(p.alive_units()),
-                    'units': [(u.x, u.y, u.get_symbol()) for u in p.alive_units()]
-                }
-                for p in self.players
-            ],
-            'finished': self.finished,
-            'winner': self.winner.name if self.winner else None
+            "players": state_players,
+            "game_time": self.game_time,
+            "total_time": self.max_time,
+            "finished": self.finished,
+            "winner": self.winner.name if self.winner else None
         }
