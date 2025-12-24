@@ -21,6 +21,7 @@ class Battle:
         """Exécute une frame de simulation"""
         self.turn += 1
         self.game_time += self.dt
+        
 
         # PHASE 1: Ordres pour unités qui en ont besoin
         all_orders = []
@@ -37,7 +38,7 @@ class Battle:
         for order in all_orders:
             unit = order['unit']
             params = {}
-             for k, v in order.items():
+            for k, v in order.items():
                if k != "unit" and k != "type":
                   params[k] = v
         
@@ -64,22 +65,46 @@ class Battle:
             self.finished = True
 
     def run(self):
-        """Boucle principale RTS"""
-        start_time = time.time()
-        last_tick = start_time
+       """Boucle principale RTS"""
+       start_time = time.time()
+       last_tick = start_time
+    
+       while not self.finished:
+          current_time = time.time()
+          elapsed = current_time - last_tick
         
-        while not self.finished:
-            current_time = time.time()
-            elapsed = current_time - last_tick
-            
-            if elapsed >= self.dt:
-                self.step()
-                last_tick = current_time
-            
-            time.sleep(0.001)
+          if elapsed >= self.dt:
+             self.step()
+             last_tick = current_time
         
-        end_time = time.time()
-        return end_time - start_time
+          time.sleep(0.001)
+    
+       end_time = time.time()
+       duration = end_time - start_time
+
+    # ⭐ Ajout historique COMPLÈTEMENT DANS run() ⭐
+       from history import add_fight_history
+
+       p1 = self.players[0].name
+       p2 = self.players[1].name
+       winner = self.winner.name if self.winner else "Aucun"
+
+       details = (
+          f"{p1}: {len(self.players[0].alive_units())} unités restantes — "
+          f"{p2}: {len(self.players[1].alive_units())} unités restantes"
+    )
+
+       add_fight_history(
+          p1,
+          p2,
+          int(duration),
+          winner,
+          details
+    )
+
+       return duration
+
+
 
     def all_units(self):
         """Retourne toutes les unités vivantes"""
