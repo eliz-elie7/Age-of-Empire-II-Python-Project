@@ -131,7 +131,7 @@ class Battle:
             if any(u.current_hp > 0 for u in p.squad)
         ]
 
-        if len(alive_players) == 0:
+        if len(alive_players) == 1:
             self.finished = True
             self.winner = alive_players[0]
 
