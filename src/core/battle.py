@@ -165,7 +165,8 @@ class Battle:
 
             state_players.append({
                 "name": p.name,
-                "alive_units": len([u for u in p.squad if u.is_alive]),
+                "color": p.color,
+                "alive_units": len([u for u in p.squad if u.current_hp > 0]),
                 "units": units_state
             })
 
