@@ -1,3 +1,5 @@
+# terminal_view.py --- IGNORE ---
+
 import os
 import math
 import time
@@ -5,35 +7,34 @@ from typing import Dict, Any
 
 
 class TerminalView:
-    """Affichage propre et stable dans le terminal."""
+    """Vue terminal ASCII pour MedievAIl."""
 
     def __init__(self, fps: int = 25):
         self.fps = fps
         self._running = True
 
-        # Forcer clear chaque frame
-        self.last_clear_time = 0
-        self.clear_interval = 0.0
-
-        # 1 caractère = TILE pixels (aligné avec units.TILE). Choisi ici en dur pour éviter imports circulaires.
+        # Taille logique : 1 case ≈ TILE pixels
         self.grid_size_factor = 32.0
 
-        self.min_width = 80
+        self.min_width = 60
         self.min_height = 20
 
     def is_running(self) -> bool:
         return self._running
 
     def _clear_screen(self):
-        # Forcer l'effacement à chaque appel pour éviter affichages multiples entre clears
         os.system('cls' if os.name == 'nt' else 'clear')
-        self.last_clear_time = time.time()
 
     def draw(self, state: Dict[str, Any], world_map):
         if not self._running:
             return
 
         self._clear_screen()
+
+        # ============================
+        #   Infos globales
+        # ============================
+        meta = state["meta"]
 
         width_map = world_map.get_width()
         height_map = world_map.get_height()
@@ -47,37 +48,48 @@ class TerminalView:
         # ============================
         #   Placement des unités
         # ============================
-        for player in state["players"]:
-            for unit in player["units"]:
-                gx = int(unit["x"] / self.grid_size_factor)
-                gy = int(unit["y"] / self.grid_size_factor)
+        for unit in state["units"]:
+            gx = int(unit["position"][0] / self.grid_size_factor)
+            gy = int(unit["position"][1] / self.grid_size_factor)
 
-                if 0 <= gx < grid_width and 0 <= gy < grid_height:
-                    initial = player["name"][0]
-                    grid[gy][gx] = f"{initial}:{unit['symbol']}"
+            if 0 <= gx < grid_width and 0 <= gy < grid_height:
+                # Une seule lettre par unité (lisible)
+                symbol = unit["owner"][0].upper()
+                grid[gy][gx] = symbol
 
         output = []
-        output.append("📊 STATS:")
 
-        for player in state["players"]:
-            output.append(f"  {player['name']}: {player['alive_units']} unités vivantes")
+        # ============================
+        #   Résumé joueurs
+        # ============================
+        output.append("📊 JOUEURS")
+        for p in state["players"]:
+            output.append(
+                f"  {p['name']}: {p['alive_units']} / {p['total_units']} unités"
+            )
 
-            for unit in player["units"]:
-                output.append(
-                    f"    {unit['symbol']} @ ({unit['x']:.1f}, {unit['y']:.1f}) "
-                    f"HP:{unit['hp']}  Ordre:{unit['order']}"
-                )
-
+        # ============================
+        #   Grille
+        # ============================
         output.append("=" * grid_width)
-
         for row in grid:
-            output.append(" ".join(row))
-
+            output.append("".join(row))
         output.append("=" * grid_width)
 
-        output.append(f"🕰️ Temps: {state['game_time']:.2f}s / {state['total_time']:.0f}s")
+        # ============================
+        #   Temps & fin
+        # ============================
+        output.append(
+            f"🕰️ Temps: {meta['time']:.2f}s / {meta['max_time']:.0f}s"
+        )
 
-        if state["finished"]:
-            output.append(f"🏆 Vainqueur: {state['winner']}")
+        if meta["finished"]:
+            if meta["winner"]:
+                output.append(f"🏆 Vainqueur: {meta['winner']}")
+            else:
+                output.append("⚖️ Match nul (temps écoulé)")
 
         print("\n".join(output))
+
+        # Limitation FPS (vue uniquement)
+        time.sleep(1 / self.fps)
