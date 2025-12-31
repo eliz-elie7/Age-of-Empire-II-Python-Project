@@ -3,8 +3,8 @@ import os
 import pygame
 from typing import Tuple
 from src.vis.view_base import View
-from src.core.units import TILE
-
+#from src.core.units import TILE
+TILE = 32.0  # 1 tile = 32 pixels
 # ================== PATHS ==================
 SPRITES_ROOT = os.path.join(os.getcwd(), "Sprites")
 BG_IMAGE_PATH = os.path.join(SPRITES_ROOT, "sol.png")
@@ -37,11 +37,12 @@ class IsometricView(View):
         pygame.init()
 
         info = pygame.display.Info()
-        self.width = info.current_w
-        self.height = info.current_h
+        #self.width = info.current_w
+        self.width = 1800
+        #self.height = info.current_h
+        self.height = 1000
         self.screen = pygame.display.set_mode(
-            (self.width, self.height), pygame.FULLSCREEN
-        )
+            (self.width, self.height))
         pygame.display.set_caption("Medievali – Isometric View")
         self.clock = pygame.time.Clock()
 
@@ -85,6 +86,9 @@ class IsometricView(View):
                     try: self.stop()
                     except Exception: pass
                     return "quit"
+                if event.key == pygame.K_F9:
+                    #ajouter quelque chose pour fermer la fenetre pygame sans pour autant arrêter le processus 
+                    return "switch_view"
                 # recenter camera on units
                 if event.key == pygame.K_c:
                     self.center_on_units()
@@ -171,6 +175,7 @@ class IsometricView(View):
             if not os.path.isdir(ut_path):
                 continue
 
+            unit_type = unit_type.lower()
             self.sprites[unit_type] = {}
 
             for color in os.listdir(ut_path):
@@ -178,7 +183,8 @@ class IsometricView(View):
                 if not os.path.isdir(cpath):
                     continue
 
-                self.sprites[unit_type][color] = {}
+                color_key = color.lower()   # 🔥 ICI
+                self.sprites[unit_type][color_key] = {}
 
                 for fname in os.listdir(cpath):
                     if not fname.lower().endswith(".png"):
@@ -189,7 +195,6 @@ class IsometricView(View):
                         os.path.join(cpath, fname)
                     ).convert_alpha()
 
-                    # ===== AUTO SCALE AoE → ISO =====
                     ow, oh = surf.get_size()
                     scale = (TILE * 1.6) / max(ow, oh)
                     surf = pygame.transform.smoothscale(
@@ -197,7 +202,7 @@ class IsometricView(View):
                         (int(ow * scale), int(oh * scale))
                     )
 
-                    self.sprites[unit_type][color][direction] = surf
+                    self.sprites[unit_type][color_key][direction] = surf
 
         self.loaded = True
 
@@ -309,7 +314,9 @@ class IsometricView(View):
         render_list = []
 
         for p in game_state.get("players", []):
-            color = p.get("name", "").lower()
+            color = p.get("color", "blue").lower()
+            #color = p.get("color", "").capitalize()
+
 
             for u in p.get("units", []):
                 wx, wy = u["x"], u["y"]
@@ -363,8 +370,8 @@ class IsometricView(View):
                 pygame.draw.rect(self.screen, (60, 60, 60), (bx, by, bar_w, 4))
                 pygame.draw.rect(self.screen, (0, 200, 0), (bx, by, int(bar_w * (hp / 100)), 4))
 
-        sx, sy = self.world_to_screen(0, 0)
-        pygame.draw.circle(self.screen, (255, 0, 0), (int(sx), int(sy)), 6)
+        #sx, sy = self.world_to_screen(0, 0)
+        #pygame.draw.circle(self.screen, (255, 0, 0), (int(sx), int(sy)), 6)
 
         pygame.display.flip()
         self.clock.tick(60)
@@ -372,19 +379,16 @@ class IsometricView(View):
 
     # ================== SPRITE PICK ==================
     def pick_sprite(self, unit_type: str, color: str):
+        unit_type = unit_type.lower()
+        color = color.lower()
+
         ut = self.sprites.get(unit_type)
         if not ut:
             return None
 
         col = ut.get(color)
         if not col:
-            try:
-                col = next(iter(ut.values()))
-            except StopIteration:
-                return None
-
-        # prefer down -> right -> any
-        try:
-            return col.get("down") or col.get("right") or next(iter(col.values()))
-        except Exception:
             return None
+
+        return next(iter(col.values()), None)
+
