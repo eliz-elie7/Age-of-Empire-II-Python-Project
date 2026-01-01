@@ -147,7 +147,10 @@ class Battle:
                     "type": u.__class__.__name__,
                     "hp": u.current_hp,
                     "position": (u.x, u.y),
-                    "order": u.current_order["type"] if u.current_order else None
+                    "order": u.current_order if isinstance(u.current_order, str)
+                    else u.current_order[0] if isinstance(u.current_order, tuple)
+                    else None
+
                 })
 
         return state

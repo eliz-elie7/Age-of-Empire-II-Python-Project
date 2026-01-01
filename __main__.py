@@ -1,3 +1,12 @@
+# main.py
+from src.cli.cli import main as cli_main
+
+if __name__ == "__main__":
+    cli_main()
+
+
+
+"""
 from src.core.units import create_unit, UnitType
 from src.core.battle import Battle
 from src.core.player import Player
@@ -11,10 +20,10 @@ import random
 
 
 def spawn_line(player, world_map, existing_units, unit_type, start_x, start_y, count, spacing):
-    """
-    Génère une ligne d’unités espacées régulièrement.
-    Utilise la map pour repositionner légèrement si collision.
-    """
+    
+    #Génère une ligne d’unités espacées régulièrement.
+    #Utilise la map pour repositionner légèrement si collision.
+    
 
     for i in range(count):
         target_x = start_x + i * spacing
@@ -111,3 +120,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+"""

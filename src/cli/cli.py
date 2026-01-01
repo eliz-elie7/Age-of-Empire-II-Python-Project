@@ -8,67 +8,35 @@ Permet de :
 """
 
 from __future__ import annotations
+# src/cli.py
 import argparse
-import sys
+from src.core.scenario import get_scenario
+from src.ai import get_general
+from src.vis.terminal_view import TerminalView
+from src.core.battle import Battle
 import time
 
-from src.core.scenario import get_scenario
-from src.core.battle import Battle
-from src.core.map import Map
 
 
 # ============================================================
 # CLI arguments parsing
 # ============================================================
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser():
     parser = argparse.ArgumentParser(
-        prog="medievail",
-        description="MedievAIl — moteur de simulation de batailles médiévales"
+        description="Medievail — moteur de bataille"
     )
 
-    parser.add_argument(
-        "--scenario", "-s",
-        type=str,
-        default="lanchester",
-        help="Nom du scénario (lanchester, mirror, skirmish)"
-    )
+    sub = parser.add_subparsers(dest="command", required=True)
 
-    parser.add_argument(
-        "--type", "-t",
-        type=str,
-        default="balanced",
-        help="Type interne du scénario"
-    )
-
-    parser.add_argument(
-        "--size",
-        type=int,
-        default=100,
-        help="Nombre d’unités par camp"
-    )
-
-    parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Affiche la progression du combat"
-    )
-
-    parser.add_argument(
-        "--logic-dt",
-        type=float,
-        default=0.05,
-        help="Pas de temps logique"
-    )
-
-    parser.add_argument(
-        "--max-time",
-        type=float,
-        default=120.0,
-        help="Durée max de la bataille (secondes simulées)"
-    )
+    run = sub.add_parser("run", help="Lancer une bataille")
+    run.add_argument("scenario", type=str)
+    run.add_argument("ai_a", type=str)
+    run.add_argument("ai_b", type=str)
+    run.add_argument("-t", "--terminal", action="store_true")
 
     return parser
+
 
 
 # ============================================================
@@ -93,53 +61,42 @@ def print_battle_summary(battle: Battle):
 # Exécution principale
 # ============================================================
 
+def run_battle(args):
+    scenario_fn = get_scenario(args.scenario)
+
+    general_a = get_general(args.ai_a)
+    general_b = get_general(args.ai_b)
+
+    players, world_map = scenario_fn(general_a, general_b)
+
+    battle = Battle(players=players, world_map=world_map)
+
+    viewer = TerminalView() if args.terminal else None
+
+    while not battle.finished:
+        state = battle.update()
+        if viewer and state:
+            viewer.draw(state, world_map)
+        time.sleep(0.04)
+
+    print("Combat terminé")
+    if battle.winner:
+        print("Vainqueur :", battle.winner.name)
+
+
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # Récupération du scénario
-    try:
-        scenario_fn = get_scenario(args.scenario)
-    except ValueError as e:
-        print(f"Erreur : {e}")
-        sys.exit(1)
+    if args.command == "run":
+        run_battle(args)
 
-    # Génération des joueurs
-    try:
-        playerA, playerB = scenario_fn(args.type, args.size)
-    except Exception as e:
-        print(f"Erreur scénario : {e}")
-        sys.exit(1)
-
-    # Création de la map
-    world_map = Map(width=120, height=120)
-
-    # Création de la bataille
-    battle = Battle(
-        players=[playerA, playerB],
-        world_map=world_map,
-        logic_dt=args.logic_dt,
-        max_time=args.max_time
-    )
-
-    # Boucle principale
-    while not battle.finished:
-        state = battle.update()
-
-        if args.verbose and state:
-            print(
-                f"t={state['meta']['time']:.2f}s | "
-                + " | ".join(
-                    f"{p['name']}:{p['alive_units']}"
-                    for p in state["players"]
-                )
-            )
 
     # Résumé final
-    print_battle_summary(battle)
+#    print_battle_summary(battle)
 
-    return 0
+#    return 0
 
 
-if __name__ == "__main__":
+if __name__ == "cli_main":
     main()

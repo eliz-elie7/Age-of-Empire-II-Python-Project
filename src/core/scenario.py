@@ -13,50 +13,53 @@ Aucune logique de combat ici.
 from typing import Callable, Tuple
 
 from src.core.player import Player
-from src.core.units import Unit
+from src.core.map import Map
+from src.core.units import create_unit, UnitType
 
-
+TILE = 32  # pixels par tile (doit correspondre à src/core/units.TILE)
 # ============================================================
 # Helpers
 # ============================================================
 
-def build_player(name: str, size: int, power: float) -> Player:
-    """
-    Construit un joueur avec une armée homogène.
-    """
-    player = Player(name=name)
+def build_player(name: str, general, size: int, unit_type, start_x, start_y, spacing, world_map):
+    player = Player(name, general)
+    units = []
 
-    for _ in range(size):
-        unit = Unit(power=power)
+    for i in range(size):
+        x = start_x + i * spacing
+        y = start_y
+        unit = create_unit(unit_type, x, y, player)
         player.add_unit(unit)
+        units.append(unit)
 
-    return player
+    return player, units
 
 
 # ============================================================
 # SCÉNARIOS LANCHESTER
 # ============================================================
 
-def lanchester_scenario(kind: str, size: int) -> Tuple[Player, Player]:
-    """
-    Scénarios inspirés de Lanchester.
-    """
-    if kind == "balanced":
-        a = build_player("A", size, power=1.0)
-        b = build_player("B", size, power=1.0)
+def lanchester_scenario(general_a, general_b):
+    player_a = Player("Army A", general_a)
+    player_b = Player("Army B", general_b)
 
-    elif kind == "numerical":
-        a = build_player("A", size, power=1.0)
-        b = build_player("B", size * 2, power=1.0)
+    MAP_W = 120 * TILE
+    MAP_H = 60 * TILE
+    world_map = Map(MAP_W, MAP_H)
 
-    elif kind == "technological":
-        a = build_player("A", int(size * 0.7), power=2.0)
-        b = build_player("B", size, power=1.0)
+    size = 20  # taille par camp (fixe pour l’instant, OK pour l’énoncé)
 
-    else:
-        raise ValueError(f"Type de scénario Lanchester inconnu : {kind}")
+    mid_y = MAP_H // 2
+    left_x = MAP_W * 0.25
+    right_x = MAP_W * 0.75
 
-    return a, b
+    for i in range(size):
+        u1 = create_unit(UnitType.KNIGHT, left_x, mid_y + i * 2, player_a)
+        u2 = create_unit(UnitType.KNIGHT, right_x, mid_y + i * 2, player_b)
+        player_a.add_unit(u1)
+        player_b.add_unit(u2)
+
+    return [player_a, player_b], world_map
 
 
 # ============================================================
@@ -92,14 +95,13 @@ _SCENARIOS = {
 }
 
 
-def get_scenario(name: str) -> Callable[[str, int], Tuple[Player, Player]]:
-    """
-    Retourne la fonction scénario associée à un nom.
-    """
+SCENARIOS = {
+    "lanchester": lanchester_scenario,
+}
+
+def get_scenario(name):
     try:
-        return _SCENARIOS[name]
+        return SCENARIOS[name.lower()]
     except KeyError:
-        raise ValueError(
-            f"Scénario inconnu : {name} "
-            f"(disponibles : {', '.join(_SCENARIOS.keys())})"
-        )
+        raise ValueError(f"Scénario inconnu : {name}")
+
