@@ -71,7 +71,7 @@ def run_battle(args):
 
     battle = Battle(players=players, world_map=world_map)
 
-    viewer = TerminalView() if args.terminal else None
+    viewer = TerminalView() if args.terminal else None #GraphicalView() à venir
 
     while not battle.finished:
         state = battle.update()

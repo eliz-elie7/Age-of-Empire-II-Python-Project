@@ -17,6 +17,8 @@ from src.core.map import Map
 from src.core.units import create_unit, UnitType
 
 TILE = 32  # pixels par tile (doit correspondre à src/core/units.TILE)
+DEFAULT_SIZE = 15  # taille par défaut des armées
+
 # ============================================================
 # Helpers
 # ============================================================
@@ -66,36 +68,60 @@ def lanchester_scenario(general_a, general_b):
 # AUTRES SCÉNARIOS
 # ============================================================
 
-def mirror_scenario(kind: str, size: int) -> Tuple[Player, Player]:
+def skirmish_scenario(general_a, general_b):
     """
-    Deux camps strictement identiques.
+    Combat désorganisé : unités réparties aléatoirement
     """
-    a = build_player("A", size, power=1.2)
-    b = build_player("B", size, power=1.2)
-    return a, b
+    import random
+
+    player_a = Player("Army A", general_a)
+    player_b = Player("Army B", general_b)
+
+    world_map = Map(120 * TILE, 80 * TILE)
+
+    for _ in range(DEFAULT_SIZE):
+        x = random.uniform(10 * TILE, 50 * TILE)
+        y = random.uniform(10 * TILE, 70 * TILE)
+        player_a.add_unit(create_unit(UnitType.KNIGHT, x, y, player_a))
+
+        x = random.uniform(70 * TILE, 110 * TILE)
+        y = random.uniform(10 * TILE, 70 * TILE)
+        player_b.add_unit(create_unit(UnitType.KNIGHT, x, y, player_b))
+
+    return [player_a, player_b], world_map
 
 
-def skirmish_scenario(kind: str, size: int) -> Tuple[Player, Player]:
+def mirror_scenario(general_a, general_b):
     """
-    Escarmouche : peu d’unités, forte puissance.
+    Deux armées strictement symétriques
     """
-    a = build_player("A", size // 2, power=1.5)
-    b = build_player("B", size // 2, power=1.5)
-    return a, b
+    player_a = Player("Army A", general_a)
+    player_b = Player("Army B", general_b)
+
+    world_map = Map(120 * TILE, 60 * TILE)
+
+    mid_y = world_map.get_height() / 2
+
+    for i in range(DEFAULT_SIZE):
+        y = mid_y + (i - DEFAULT_SIZE / 2) * TILE
+        player_a.add_unit(create_unit(UnitType.KNIGHT, 30 * TILE, y, player_a))
+        player_b.add_unit(create_unit(UnitType.KNIGHT, 90 * TILE, y, player_b))
+
+    return [player_a, player_b], world_map
 
 
 # ============================================================
 # REGISTRY
 # ============================================================
 
-_SCENARIOS = {
+SCENARIOS = {
     "lanchester": lanchester_scenario,
     "mirror": mirror_scenario,
     "skirmish": skirmish_scenario,
 }
 
 
-SCENARIOS = {
+_SCENARIOS = {
     "lanchester": lanchester_scenario,
 }
 

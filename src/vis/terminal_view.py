@@ -62,7 +62,7 @@ class TerminalView:
         # ============================
         #   Résumé joueurs
         # ============================
-        output.append("JOUEURS")
+        output.append(" JOUEURS")
         for p in state["players"]:
             output.append(
                 f"  {p['name']}: {p['alive_units']} / {p['total_units']} unités"
