@@ -16,7 +16,25 @@ def main(stdscr):
     sleep(5)
     stdscr.addstr(1,0,"Salut")
     stdscr.addstr("Pretty texte", curses.color_pair(2))"""
-    taille = 100
+    taille, h = 100
+    l=10
+    #On récupère la taille du terminal
+    height, width = stdscr.getmaxyx()
+    if taille > height:
+        if taille > width:
+        
+        else:
+            
+    else:
+        if taille > width :
+
+        else:
+            
+    
+
+            
+
+
     for i in range(taille):
         for j in range(taille):
             if i%2==0:
@@ -31,8 +49,11 @@ def main(stdscr):
                     stdscr.addstr(i,j, "-")
     stdscr.refresh()
     sleep(5)
-    
-#stdscr.addstr(0, 0, "Current mode: Typing mode", curses.A_REVERSE)
+#si taille>height ou width on affiche que la première partir de la grille 
+# de taille height*taille ou taille*width ou height*width 
+# en commencant par le début et on va jouer avec le cureseur pour que 
+# la map se déplace   
+#
 
 # Lancer l'application
 if __name__ == "__main__":
