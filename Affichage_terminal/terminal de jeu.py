@@ -64,3 +64,6 @@ def main(stdscr):
 
 # Lancer l'application
 if __name__ == "__main__":
+    curses.wrapper(main)
+
+#argument 
