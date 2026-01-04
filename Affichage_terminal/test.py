@@ -63,11 +63,14 @@ def move_camera(cam_x, cam_y, key, map1, view_w, view_h):
 
     return cam_x, cam_y #renvoi un tuple de valeur
 
+def quit(key):
+    return key==ord('q')
+
 
 
 def main(stdscr):
     #map : à récupérer de chez Simon
-    map1=Map(100,10)
+    map1=Map(100,100)
     h=10 #hauteur y de map
     l=100  #largeur x de map
     #On récupère la taille du terminal
@@ -90,8 +93,13 @@ def main(stdscr):
         key=stdscr.getch() #lecture de la touche tapée
         cam_x, cam_y = move_camera(cam_x, cam_y, key, map1, view_w, view_h)
         draw_map(stdscr, map1, cam_x, cam_y, view_h, view_w)
+        if quit(key):
+            break
+            
+
+
  
-    sleep(15)
+    sleep(1)
 
 #si taille>height ou width on affiche que la première partir de la grille 
 # de taille height*taille ou taille*width ou height*width 
