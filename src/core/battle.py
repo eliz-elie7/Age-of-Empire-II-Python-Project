@@ -91,36 +91,6 @@ class Battle:
         # ===============================
         #     Construction du STATE
         # ===============================
-        """
-        state_players = []
-        for p in self.players:
-            state_players.append({
-                "name": p.name,
-                "alive_units": len([u for u in p.squad if u.is_alive]),
-                "units": [
-                    {
-                        "symbol": u.get_symbol(),
-                        "x": u.x,
-                        "y": u.y,
-                        "hp": u.current_hp,
-                        "order": u.current_order
-                    }
-                    for u in p.squad
-                ]
-            })
-
-        return {
-            "players": state_players,
-            "game_time": self.time,
-            "total_time": self.max_time,
-            "finished": self.finished,
-            "winner": self.winner.name if self.winner else None
-        }
-        """
-
-        # ===============================
-        #     Construction du STATE
-        # ===============================
         state = {
             "meta": {
                 "time": self.time,
