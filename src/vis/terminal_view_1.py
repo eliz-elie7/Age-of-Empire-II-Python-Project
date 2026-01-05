@@ -5,10 +5,11 @@ from time import sleep
 CONST_W = 0
 
 class Terminal :
-    def __init__(self, game_map):
+    def __init__(self, battle):
         self.stdscr = None
         self.runing = True
-        self.map = game_map
+        self.battle = battle
+        self.map = battle.world_map #recupere la map
 
         #Camera
         self.cam_x, self.cam_y = 0,0
@@ -96,6 +97,14 @@ class Terminal :
 
     
     def _draw_map(self):
+        units = self.battle.all_units()
+        units_by_cell = {}
+
+        for u in units:
+            x = int(u.x)
+            y = int(u.y)
+            units_by_cell[(x, y)] = u
+
         for y in range(self.view_h):
             for x in range(self.view_w):
                 #cam_x cam_y montre dans quelle partie de la map (carte pour éviter ambiguité) on est, x et y montre à quel endroit sur cette "page" on est.
@@ -106,7 +115,12 @@ class Terminal :
                 if carte_y >= self.map.get_height() or carte_x >= self.map.get_width():
                     continue
 
-                self.stdscr.addstr(y, x, self.map.data[carte_y][carte_x]) #il faut récupérer ce que je dois marquer
+                if (carte_x, carte_y) in units_by_cell:
+                    char = units_by_cell[(carte_x, carte_y)].get_symbol()
+                else:
+                    char = "."
+
+                self.stdscr.addstr(y, x, char) #il faut récupérer ce que je dois marquer
 
     # =============================
     # TAILLE MAP = f(TAILLE INFO)
