@@ -95,8 +95,6 @@ def main(stdscr):
         draw_map(stdscr, map1, cam_x, cam_y, view_h, view_w)
         if quit(key):
             break
-            
-
 
  
     sleep(1)
@@ -144,5 +142,4 @@ if __name__ == "__main__":
                 else :
                     stdscr.addstr(i,j, "-")
     stdscr.refresh()"""
-
 
