@@ -1,179 +1,190 @@
-import time
-import random
-from typing import List, Dict, Any
+# src/core/battle.py
 
-from .player import Player
-from .map import Map
-from .history import add_fight_history 
-from .html_generator import generate_snapshot_html
+import math
+from typing import List, Dict, Any, Optional
+
 
 class Battle:
-    def __init__(self, players, world_map, logic_dt=0.05, max_time=60.0):
+    """
+    Moteur de simulation RTS indépendant de la visualisation.
+    """
+
+    def __init__(
+        self,
+        players: List,
+        world_map,
+        logic_dt: float = 0.05,
+        max_time: float = 60.0
+    ):
         self.players = players
         self.map = world_map
-        self.world_map = world_map
+        self.world_map = world_map  # alias
         self.logic_dt = logic_dt
         self.max_time = max_time
-        
-        # --- CORRECTION ICI : On utilise game_time partout ---
-        self.game_time = 0.0 
-        
+
+        self.time = 0.0
         self.finished = False
         self.winner = None
-        self.paused = False
-        self.history_saved = False 
+        self.step_count = 0
 
-        # Infos de départ
-        self.start_info = {
-            p.name: {
-                "ai": p.general.__class__.__name__,
-                "unit_count": len(p.squad)
-            }
-            for p in players
-        }
+    # --------------------------------------------------
+    # UNITÉS
+    # --------------------------------------------------
 
-    def export_state_html(self):
-        print(f"📸 Snapshot HTML généré à t={self.game_time:.2f}s")
-        try:
-            generate_snapshot_html(self.players, self.game_time)
-            self.paused = True 
-        except Exception as e:
-            print(f"❌ Erreur HTML : {e}")
-
-    def collect_units(self):
+    def collect_units(self) -> List:
         units = []
         for p in self.players:
             units.extend(p.squad)
         return units
 
-    def force_decision_by_points(self):
-        """Calcule les PV restants pour désigner un vainqueur au temps."""
-        hp_p1 = sum(u.current_hp for u in self.players[0].squad if u.is_alive)
-        hp_p2 = sum(u.current_hp for u in self.players[1].squad if u.is_alive)
+    def all_units(self) -> List:
+        return [u for u in self.collect_units() if getattr(u, "is_alive", False)]
 
-        print(f"⌛ TEMPS ÉCOULÉ ! Décision : {self.players[0].name}={int(hp_p1)}HP vs {self.players[1].name}={int(hp_p2)}HP")
+    # --------------------------------------------------
+    # UPDATE PRINCIPALE
+    # --------------------------------------------------
 
-        if hp_p1 > hp_p2:
-            self.winner = self.players[0]
-        elif hp_p2 > hp_p1:
-            self.winner = self.players[1]
-        else:
-            self.winner = None 
-
-    def save_to_history(self):
-        """Sauvegarde le résultat dans history.html"""
-        if self.history_saved: return
-        
-        winner_name = self.winner.name if self.winner else "MATCH NUL"
-        
-        # Liste de tuples : (Symbole, Nom_Equipe)
-        survivors_data = []
-        for p in self.players:
-            for u in p.squad:
-                if u.is_alive:
-                    survivors_data.append((u.get_symbol(), p.name))
-        
-        try:
-            p1 = self.players[0]
-            p2 = self.players[1]
-            
-            add_fight_history(
-                p1.name, 
-                p2.name,
-                self.start_info[p1.name]['ai'], 
-                self.start_info[p2.name]['ai'],
-                self.start_info[p1.name]['unit_count'], 
-                self.start_info[p2.name]['unit_count'],
-                winner_name, 
-                self.game_time, # Utilisation correcte de game_time
-                survivors_data 
-            )
-            print(f"✔ Historique sauvegardé : Vainqueur {winner_name}")
-            self.history_saved = True
-        except Exception as e:
-            print("❌ Erreur sauvegarde historique :", e)
-
-    def update(self):
-        if self.finished or self.paused:
+    def update(self, delta_time: Optional[float] = None) -> Optional[Dict[str, Any]]:
+        if self.finished:
             return None
 
-        # 1. Vérification du Temps
-        self.game_time += self.logic_dt # Incrémentation correcte
-        
-        if self.game_time >= self.max_time:
-            self.force_decision_by_points()
+        dt = self.logic_dt if delta_time is None else float(delta_time)
+        self.time += dt
+        self.step_count += 1
+
+        if self.time >= self.max_time:
             self.finished = True
-            self.save_to_history()
-            return self.get_state_dict()
 
-        # 2. Update IA et Unités
-        all_units = self.collect_units()
-        random.shuffle(all_units) 
+        # Snapshot vivant au début du tick
+        all_units = self.all_units()
 
-        # IA Logic
+        # ===============================
+        # 1) IA — attribution des ordres
+        # ===============================
         for p in self.players:
-            units_needing_orders = [u for u in p.squad if u.needs_order()]
-            if not units_needing_orders: continue
-            try:
-                orders = p.general.give_orders(p, self.players, self.map, units_needing_orders)
-            except: orders = []
+            units_needing_orders = [
+                u for u in p.squad
+                if getattr(u, "needs_order", lambda: True)()
+            ]
 
-            if orders:
-                for order in orders:
-                    if order and 'unit' in order and order['unit'].is_alive:
-                        u = order['unit']
-                        if order['type'] == 'attack': u.set_order('attack', {'target': order.get('target')})
-                        elif order['type'] == 'move': u.set_order('move', {'position': order.get('position')})
-                        else: u.clear_order()
+            if not units_needing_orders:
+                continue
 
-        # Physique
+            orders = []
+            if hasattr(p, "general") and hasattr(p.general, "give_orders"):
+                try:
+                    orders = p.general.give_orders(
+                        p,
+                        self.players,
+                        self.map,
+                        units_needing_orders
+                    )
+                except Exception:
+                    orders = []
+
+            for order in orders or []:
+                if not order or "type" not in order or "unit" not in order:
+                    continue
+
+                u = order["unit"]
+                if not getattr(u, "is_alive", False):
+                    continue
+
+                if order["type"] == "attack" and "target" in order:
+                    u.set_order("attack", {"target": order["target"]})
+                elif order["type"] == "move" and "position" in order:
+                    u.set_order("move", {"position": order["position"]})
+                elif order["type"] == "hold":
+                    u.set_order("hold", {})
+                else:
+                    u.clear_order()
+
+        # ===============================
+        # 2) UPDATE DES UNITÉS
+        # ===============================
         for u in all_units:
-            if u.is_alive:
-                u.update(self, self.logic_dt)
+            if hasattr(u, "update"):
+                try:
+                    u.update(self, dt)
+                except Exception:
+                    # sécurité absolue
+                    u.is_alive = False
 
-        # Nettoyage
+        # ===============================
+        # 3) CLAMP GLOBAL (ANTI COORD NÉGATIVES)
+        # ===============================
+        for u in self.all_units():
+            u.x, u.y = self.world_map.clamp_position(u.x, u.y)
+
+        # ===============================
+        # 4) NETTOYAGE DES MORTS
+        # ===============================
         for p in self.players:
-            p.squad = [u for u in p.squad if u.is_alive]
+            #p.squad = [u for u in p.squad if getattr(u, "is_alive", False)]
+            p.squad = [u for u in p.squad if u.current_hp > 0]
 
-        # 3. Vérification KO
-        alive_counts = [len(p.squad) for p in self.players]
-        
-        if alive_counts[0] == 0 and alive_counts[1] > 0:
-            self.winner = self.players[1]
+        # ===============================
+        # 5) CONDITION DE VICTOIRE
+        # ===============================
+        alive_players = [
+            p for p in self.players
+            if any(u.current_hp > 0 for u in p.squad)
+        ]
+
+        if len(alive_players) == 1:
             self.finished = True
-        elif alive_counts[1] == 0 and alive_counts[0] > 0:
-            self.winner = self.players[0]
-            self.finished = True
-        elif alive_counts[0] == 0 and alive_counts[1] == 0:
-            self.finished = True
+            self.winner = alive_players[0]
 
-        if self.finished:
-            self.save_to_history()
+        # ===============================
+        # 6) SNAPSHOT
+        # ===============================
+        return self.get_state()
 
-        return self.get_state_dict()
+    # --------------------------------------------------
+    # STATE
+    # --------------------------------------------------
 
-    def get_state_dict(self):
+    def get_state(self) -> Dict[str, Any]:
         state_players = []
+
         for p in self.players:
+            units_state = []
+            for u in p.squad:
+                units_state.append({
+                    "id": id(u),
+                    "symbol": u.get_symbol(),
+                    "x": float(u.x),
+                    "y": float(u.y),
+                    "hp": float(u.current_hp),
+                    "order": u.current_order,
+                    "state": (
+                        "dead" if not u.is_alive
+                        else u.current_order or "idle"
+                    )
+                })
+
             state_players.append({
                 "name": p.name,
-                "alive_units": len([u for u in p.squad if u.is_alive]),
-                "units": [
-                    {
-                        "symbol": u.get_symbol(),
-                        "x": u.x,
-                        "y": u.y,
-                        "hp": u.current_hp,
-                        "order": getattr(u, 'current_order', 'None')
-                    }
-                    for u in p.squad
-                ]
+                "color": p.color,
+                "alive_units": len([u for u in p.squad if u.current_hp > 0]),
+                "units": units_state
             })
 
         return {
             "players": state_players,
-            "game_time": self.game_time,
-            "total_time": self.max_time,
-            "finished": self.finished,
-            "winner": self.winner.name if self.winner else None
+            "game_time": float(self.time),
+            "total_time": float(self.max_time),
+            "finished": bool(self.finished),
+            "winner": self.winner.name if self.winner else None,
+            "_step": self.step_count
         }
+
+    # --------------------------------------------------
+    # UTILITAIRE
+    # --------------------------------------------------
+
+    def reset(self):
+        self.time = 0.0
+        self.finished = False
+        self.winner = None
+        self.step_count = 0

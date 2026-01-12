@@ -15,7 +15,8 @@ from src.ai import get_general
 from src.vis.terminal_view import TerminalView
 from src.core.battle import Battle
 import time
-
+import sys
+import subprocess
 
 
 # ============================================================
@@ -71,18 +72,61 @@ def run_battle(args):
 
     battle = Battle(players=players, world_map=world_map)
 
-    viewer = TerminalView() if args.terminal else None #GraphicalView() à venir
+    viewer = TerminalView() if args.terminal else None 
+    running = True
+    
+    while not battle.finished and running:
+        # 1. On ne met à jour le combat que si on n'est pas en pause (géré par le flux normal ici)
+        battle.update()
+        state = battle.get_state()
+        
+        # 2. Gestion des entrées
+        action = viewer.handle_input()
+        
+        if action == "QUIT":
+            running = False
+            
+        elif action == "p":
+            print("\n" + "="*30)
+            print("PAUSE ACTIVÉE")
+            print("Lancement de html_generator...")
+            
+            # --- ÉTAPE A : Lancer le script html_generator ---
+            try:
+                # sys.executable assure qu'on utilise le même interpréteur python (python3, venv, etc.)
+                subprocess.run([sys.executable, "html_generator.py"])
+                print("Génération terminée.")
+            except Exception as e:
+                print(f"Erreur lors du lancement du script : {e}")
 
-    while not battle.finished:
-        state = battle.update()
-        if viewer and state:
-            viewer.draw(state, world_map)
+            print("Appuyez sur 'p' pour reprendre le combat.")
+            print("="*30 + "\n")
+
+            # --- ÉTAPE B : Boucle d'attente (Pause) ---
+            paused = True
+            while paused and running:
+                # On continue d'écouter le clavier sans mettre à jour la bataille
+                pause_action = viewer.handle_input()
+                
+                if pause_action == "p":
+                    paused = False
+                    print(">>> REPRISE DU COMBAT")
+                elif pause_action == "QUIT":
+                    running = False
+                    paused = False
+                
+                # Petite pause pour ne pas surcharger le processeur
+                time.sleep(0.1)
+
+        # 3. Affichage
+        if running: # On affiche seulement si on n'a pas quitté
+            viewer.render(state)    
+
         time.sleep(0.04)
 
     print("Combat terminé")
     if battle.winner:
         print("Vainqueur :", battle.winner.name)
-
 
 def main(argv=None):
     parser = build_parser()
