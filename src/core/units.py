@@ -52,6 +52,9 @@ class Unit:
 
     def can_occupy_same_space(self, other: 'Unit') -> bool:
         return False
+    def get_damage_type(self) -> str:
+        """Par défaut, tout le monde tape en mêlée sauf surcharge."""
+        return "melee"
 
     def get_attack_windup(self) -> float:
         return 0.12
@@ -110,7 +113,14 @@ class Unit:
             if self.attack_windup_timer <= 0:
                 target = self._order_data.get("target")
                 if target and target.is_alive:
-                    target.take_damage(self.get_attack(), "melee")
+                    # --- CHANGEMENT IMPORTANT ICI ---
+                    # 1. On calcule les dégâts complets (Base + Bonus)
+                    dmg = self.get_total_damage(target)
+                    # 2. On récupère le bon type (melee ou pierce)
+                    dmg_type = self.get_damage_type()
+                    # 3. On applique
+                    target.take_damage(dmg, dmg_type)
+                    # --------------------------------    
             return
 
         # anti idle
@@ -193,6 +203,18 @@ class Unit:
     def has_reached_position(self, x: float, y: float, margin: float = 5.0) -> bool:
         return (self.x - x)**2 + (self.y - y)**2 <= margin * margin
 
+    #===== BONUS DE DÉGÂTS =====
+    def get_bonus_damage(self, target: 'Unit') -> int:
+        """Par défaut, aucun bonus"""
+        return 0
+
+    def get_damage_against(self, target: 'Unit') -> int:
+        """Calcule les dégâts totaux avant armure"""
+        return self.get_attack() + self.get_bonus_damage(target)
+    def get_total_damage(self, target: 'Unit') -> int:
+        
+        """Calcul neutre : Attaque de base + Bonus éventuel."""
+        return self.get_attack() + self.get_bonus_damage(target)
 # ===== UNITÉS =====
 
 class Knight(Unit):
@@ -207,6 +229,11 @@ class Knight(Unit):
     def get_symbol(self): return "K"
     def get_collision_radius(self): return 0.5 * TILE
     def get_attack_windup(self): return 0.15
+    def get_bonus_damage(self, target: 'Unit') -> int:
+        # Bonus contre les arbalétriers (Crossbowman)
+        if isinstance(target, Crossbowman):
+            return 8  # Valeur AOE2
+        return 0
 
 class Pikeman(Unit):
     def get_max_hp(self): return 55
@@ -220,6 +247,13 @@ class Pikeman(Unit):
     def get_symbol(self): return "P"
     def get_collision_radius(self): return 0.45 * TILE
     def get_attack_windup(self): return 0.20
+    def get_bonus_damage(self, target: 'Unit') -> int:
+        # Bonus massif contre la cavalerie (Knight)
+        # On vérifie le type via isinstance ou le nom de classe
+        if isinstance(target, Knight): 
+            return 22  # Valeur AOE2
+        # (Optionnel) Bonus contre War Elephant / Camel si tu les ajoutes
+        return 0
 
 class Crossbowman(Unit):
     def get_max_hp(self): return 35
@@ -233,7 +267,14 @@ class Crossbowman(Unit):
     def get_symbol(self): return "C"
     def get_collision_radius(self): return 0.45 * TILE
     def get_attack_windup(self): return 0.30
-
+    def get_bonus_damage(self, target: 'Unit') -> int:
+        # Petit bonus contre piquiers parfois, mais surtout dégâts de base
+        # AOE2: Crossbowman a peu de bonus, c'est surtout le Skirmisher qui en a.
+        return 0
+    def get_damage_type(self) -> str:
+        # RÈGLE OFFICIELLE : Les flèches sont des dégâts "pierce" (perçants)
+        # Cela permet à l'armure "pierce_armor" des cibles de fonctionner.
+        return "pierce"
 # ===== FACTORY =====
 
 def create_unit(unit_type: UnitType, x: float, y: float, player) -> Unit:
