@@ -275,7 +275,7 @@ class IsometricView(View):
         for _, surf, sx, sy, hp, color in render_list:
             if surf:
                 anchor_x = surf.get_width() // 2
-                anchor_y = surf.get_height() - int(TILE * 0.15)  # pied de l’unité
+                anchor_y = surf.get_height() - int(TILE * 0.35) # Teste 0.35 ou 0.4
 
                 x = sx - anchor_x
                 y = sy - anchor_y
@@ -284,12 +284,8 @@ class IsometricView(View):
 
                 shadow = pygame.Surface((shadow_w, shadow_h), pygame.SRCALPHA)
                 pygame.draw.ellipse(shadow, (0, 0, 0, 70), shadow.get_rect())
-
-                self.screen.blit(
-                    shadow,
-                    (sx - shadow_w // 2, sy - shadow_h // 2)
-                )
-
+                # 2. Dessine l'ombre légèrement PLUS BAS que les pieds pour donner du relief
+                self.screen.blit(shadow, (sx - shadow_w // 2, sy - shadow_h // 4))
                 self.screen.blit(surf, (x, y))
 
         pygame.display.flip()
