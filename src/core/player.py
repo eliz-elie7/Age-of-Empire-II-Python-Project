@@ -3,7 +3,8 @@ class Player:
 
     def __init__(self, name: str, general):
         self.name = name
-        self.general = general
+        self.general = general() if isinstance(general, type) else general
+        self.color = None
         self.squad = []
 
     def alive_units(self):
