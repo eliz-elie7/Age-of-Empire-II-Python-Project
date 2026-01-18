@@ -11,6 +11,8 @@ class UnitType(Enum):
     KNIGHT = "knight"
     PIKEMAN = "pikeman"
     CROSSBOWMAN = "crossbowman"
+    LONGSWORDSMAN = "longswordsman"
+    ELITESKIRMISHER = "eliteskirmisher"
 
 class Unit:
     """Classe de base pour toutes les unités - RTS stable"""
@@ -275,6 +277,25 @@ class Crossbowman(Unit):
         # RÈGLE OFFICIELLE : Les flèches sont des dégâts "pierce" (perçants)
         # Cela permet à l'armure "pierce_armor" des cibles de fonctionner.
         return "pierce"
+    
+    class LongSwordsman(Unit):
+        """ Infanterie standard. Fort au corps à corps, bat les Piquiers et les Skirmishers, mais meurt contre les Chevaliers et Archers. """
+        def get_max_hp(self): return 60
+    def get_attack(self): return 9
+    def get_melee_armor(self): return 1
+    def get_pierce_armor(self): return 1
+    def get_range(self): return 0.5 * TILE # Corps à corps strict
+    def get_reload_time(self): return 2.0
+    def get_speed(self): return 0.9 * TILE # Un peu lent
+    def get_line_of_sight(self): return 4.0 * TILE
+    def get_symbol(self): return "S" # S pour Swordsman
+    def get_collision_radius(self): return 0.4 * TILE
+
+    def get_bonus_damage(self, target: 'Unit') -> int:
+        # Bonus standard vs Bâtiments (si tu en ajoutes plus tard) : +6
+        # Bonus vs Aigles (pas dans le jeu pour l'instant)
+        # Globalement, c'est une unité "stats pures", elle a peu de bonus spécifiques contre les unités.
+        return 0
 # ===== FACTORY =====
 
 def create_unit(unit_type: UnitType, x: float, y: float, player) -> Unit:
