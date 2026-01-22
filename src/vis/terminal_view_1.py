@@ -1,143 +1,230 @@
 import curses
 from time import sleep
+from .view_base import View
 
 #Valeur à mofifier selon si on veut plus ou moins de place pour afficher les infos de jeu
 CONST_W = 0
 
-class Terminal :
-    def __init__(self, battle):
-        self.stdscr = None
-        self.runing = True
-        self.battle = battle
-        self.map = battle.world_map #recupere la map
+TILE = 32
 
-        #Camera
+class Terminal :
+    def __init__(self):
+        super().__init__()
+        self.stdscr = None
+    
+        #Camera (coo haut gauche de la vue)
         self.cam_x, self.cam_y = 0,0
 
         #taille d'affichage de map dans le terminal
         self.view_h=0
-        self.view_w=0     
+        self.view_w=0  
+
+        #limites de map
+        self.map_width = 0
+        self.map_height = 0   
 
     # =============================
-    # POINT D’ENTRÉE PUBLIC
+    # Def methodes View
     # =============================
-    def run(self):
-        curses.wrapper(self._main) 
+    def on_enter(self, battle, game_state): # nouveau main
+        self.running = True
+        self._switch_requested = False
+        self.battle = battle
+        self.map_width = battle.world_map.get_width()
+        self.map_height = battle.world_map.get_height()
 
-    # =============================
-    # MAIN INTERNE (Ne pas utiliser)
-    # =============================
-    def _main(self, stdsrc):
-        self.stdscr = stdsrc
-
+        self.stdscr = curses.initscr()
         self._init_curses()
+
         self._init_screen()
+        self.center_cam(game_state)
+        
+    def render(self, game_state): #draw terminal
+        self.stdscr.erase()
+        self._draw_map(game_state)
+        self._draw_info(self.view_h)
+        self.stdscr.refresh()
 
-        while self.runing :
-            self._update()
-            self._draw_terminal()
-            sleep(0.02)      # ~50 FPS/20ms
+    def handle_input(self):
+        key = self.stdscr.getch()
 
+        if key == -1:
+            return None
+
+        #Arret d'affichage
+        if key == ord('t') or key == ord('t'):
+            self.stop()
+            return "quit"
+
+        # Demande de changement de vue
+        if key == curses.KEY_F9:
+            return "switch_view"
+
+        #Déplacer la caméra
+        if key==curses.KEY_UP or key == ord('z'):
+            self.cam_y-= TILE
+        elif key==curses.KEY_DOWN or key == ord('s'):
+            self.cam_y+= TILE
+        elif key==curses.KEY_LEFT or key == ord('q'):
+            self.cam_x-= TILE
+        elif key==curses.KEY_RIGHT or key == ord('d'):
+            self.cam_x+= TILE
+
+        if key == ord('Z'):
+            self.cam_y-= TILE*10
+        elif key == ord('S'):
+            self.cam_y+= TILE*10
+        elif key == ord('Q'):
+            self.cam_x-= TILE*10
+        elif key == ord('D'):
+            self.cam_x+= TILE*10
+
+        if key== ord('p') or key == ord('P'):
+            return "Pause"
+        
+        """ajouter dans main : is_paused=False 
+        et dans while running and not battle.finished:
+
+        elif action == "pause":
+        # On inverse l'état de la pause (Toggle)
+        is_paused = not is_paused 
+
+        if not is_paused:
+            battle.update()
+            game_state = battle.get_state()
+        else:
+            game_state = battle.get_state()   
+
+        => changer ordre main
+        """
+        if key == 9 or key == ord('\t'):
+            return "HTML"
+        
+        """#Recentrer caméra
+        if key== ord('c'):
+            self.center_camera(game_state)"""
+
+        self._limit_camera() #fonctionde sécurité
+        return None
+
+    def on_exit(self):
+        if self.stdscr:
+            curses.nocbreak()
+            self.stdscr.keypad(False)
+            curses.echo()
+            curses.endwin()
+
+    # =============================
+    # LOGIQUE INTERNE (Ne pas utiliser)
+    # =============================
     def _init_curses(self):
+        curses.noecho()   
+        curses.cbreak()
         self.stdscr.keypad(True)    #Actctivation de la lecture du clavier
         self.stdscr.nodelay(True)   #Mode non bloquant si getch() n'a pas recu de valeur
-        curses.curs_set(0)
+        try:
+            curses.curs_set(0)      # Cache le curseur
+        except curses.error:
+            pass
+
+        curses.start_color()
+        curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)      # Paire 2: rouge sur noir
+        curses.init_pair(1, curses.COLOR_BLUE, curses.COLOR_BLACK)     # Paire 1: bleu sur noir
+        curses.init_pair(3, curses.COLOR_GREEN, curses.COLOR_BLACK)    # Paire 3: vert sur noir
+        curses.init_pair(4, curses.COLOR_YELLOW, curses.COLOR_BLACK)   # Paire 4: jaune sur noir
+        curses.init_pair(5, curses.COLOR_CYAN, curses.COLOR_BLACK)     # Paire 5: cyan sur noir
 
     def _init_screen(self):
         height, width = self.stdscr.getmaxyx()   #taille du terminal
-        info_h = len(self._info_lines())     #Calcul de la taille de la barre d'info
-        self.view_h = max(0, height - info_h)    #Permet de connaitre la taille de la map
+        info_h = len(self._info_lines())         #Calcul de la taille de la barre d'info
+        self.view_h = max(0, height - info_h - 1)    #Permet de connaitre la taille de la map
         self.view_w = width - CONST_W
 
     # =============================
-    # BOUCLE DE JEU
+    # CAMERA
     # =============================
-    def _update(self):
-        key=self.stdscr.getch()
-        self._keyboard_input(key)
+    def center_cam(self, game_state):
+        all_x = []
+        all_y = []
+        for p in game_state["players"]:
+            for u in p["units"]:
+                all_x.append(u["x"])
+                all_y.append(u["y"])
+
+        if not all_x:
+            return
+
+        avg_x = sum(all_x) / len(all_x)
+        avg_y = sum(all_y) / len(all_y)
+
+        #Centrer (/!\on est en pixel =>(* 32))
+        view_w_px = (self.view_w * TILE)/2
+        view_h_px = (self.view_h * TILE)/2
+
+        self.cam_x = int(avg_x - (view_w_px / 2))
+        self.cam_y = int(avg_y - (view_h_px / 2))
+
         self._limit_camera()
-    
-    def _draw_terminal(self):
-        self.stdscr.clear()
-        self._draw_info(self.view_h)
-        self._draw_map()
-        self.stdscr.refresh()
 
-    # =============================
-    # INPUT
-    # =============================
-    def _keyboard_input(self, key):
-        #Arret d'affichage
-        if key == ord('q'):
-            self.runing = False
 
-        #Déplacer la caméra
-        if key==curses.KEY_UP:
-            self.cam_y-=1
-        elif key==curses.KEY_DOWN:
-            self.cam_y+=1
-        elif key==curses.KEY_LEFT:
-            self.cam_x-=1 
-        elif key==curses.KEY_RIGHT:
-            self.cam_x+=1
-
-    # =============================
-    # LIMITE LA CAMERA
-    # =============================
     def _limit_camera(self):
-        self.cam_x = max(0, min(self.cam_x, self.map.get_width() - self.view_w))
-        self.cam_y = max(0, min(self.cam_y, self.map.get_height() - self.view_h))
+        max_x = self.map_width - (self.view_w * TILE)
+        max_y = self.map_height - (self.view_h * TILE)
+
+        self.cam_x = max(0, min(self.cam_x, self.map_width - self.view_w))
+        self.cam_y = max(0, min(self.cam_y, self.map_height - self.view_h))
 
     # =============================
     # DESSIN
     # =============================
     def _draw_info(self, start_y):
         for i, line in enumerate(self._info_lines()):
-            self.stdscr.addstr(start_y + i, 0, line)
+            try:
+                self.stdscr.addstr(start_y + i, 0, line[:self.view_w])
+            except curses.error:
+                pass
 
     
-    def _draw_map(self):
-        units = self.battle.all_units()
+    def _draw_map(self, game_state):                    #tel quel
         units_by_cell = {}
-
-        for u in units:
-            x = int(u.x)
-            y = int(u.y)
-            units_by_cell[(x, y)] = u
+        for i, p in enumerate(game_state["players"]): #recup unit
+            color_id=i+1
+            for u in p["units"]:
+                x = int(u["x"]) //TILE  #les coordonné des unité sont en case et non en pixel
+                y = int(u["y"]) //TILE
+                units_by_cell[(x, y)] = (u, color_id)
 
         for y in range(self.view_h):
             for x in range(self.view_w):
                 #cam_x cam_y montre dans quelle partie de la map (carte pour éviter ambiguité) on est, x et y montre à quel endroit sur cette "page" on est.
-                carte_y = self.cam_y + y
-                carte_x = self.cam_x + x
+                tile_x = (self.cam_x // TILE) + x
+                tile_y = (self.cam_y // TILE) + y
 
                 #si la ligne ou la colonne demandé n'existe pas
-                if carte_y >= self.map.get_height() or carte_x >= self.map.get_width():
+                if tile_y >= self.map_height //TILE or tile_x >= self.map_width //TILE:
                     continue
 
-                if (carte_x, carte_y) in units_by_cell:
-                    char = units_by_cell[(carte_x, carte_y)].get_symbol()
-                else:
-                    char = "."
+                if (tile_x, tile_y) in units_by_cell:
+                    unit_data, col_id = units_by_cell[(tile_x, tile_y)]
+                    char = unit_data["symbol"]
 
-                self.stdscr.addstr(y, x, char) #il faut récupérer ce que je dois marquer
+                    try:
+                        self.stdscr.addch(y, x, char, curses.color_pair(col_id))
+                    except curses.error: pass
+                else:
+                    try:
+                        self.stdscr.addch(y, x, ".") 
+                    except curses.error: pass 
 
     # =============================
     # TAILLE MAP = f(TAILLE INFO)
     # =============================
     def _info_lines(self):
         return [
-            "Q : Quitter"
+            "---COMMANDES---"
+            "T : Quitter | ZQSD / Flèches : Caméra"
+            " : Unit stat"
+            "P : Pause/Play"
+            "Tab : HTLM doc"
+            f"Cam: ({self.cam_x},{self.cam_y}) | Map: {self.map_width}x{self.map_height}"
         ]
-
-
-"""
-Terminal
-│
-├── run()
-├── _main()
-│    ├── _update()
-│    └── _draw terminal()
-│          ├── _draw_info()
-│          └── _draw_map()
-"""
