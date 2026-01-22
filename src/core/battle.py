@@ -188,3 +188,27 @@ class Battle:
         self.finished = False
         self.winner = None
         self.step_count = 0
+    def get_result(self):
+        """
+        Résumé final pour la CLI / plotting
+        """
+        result = {
+            "time": self.time,
+            "max_time": self.max_time,
+            "finished": self.finished,
+            "winner": self.winner.name if self.winner else None,
+            "players": []
+        }
+
+        for p in self.players:
+            total = len(p.squad)
+            alive = len([u for u in p.squad if u.current_hp > 0])
+
+            result["players"].append({
+                "name": p.name,
+                "alive_units": alive,
+                "dead_units": total - alive,
+                "total_units": total
+            })
+
+        return result

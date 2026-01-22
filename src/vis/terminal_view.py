@@ -5,6 +5,7 @@ import tty
 import select
 from .view_base import View
 
+from .view_base import View
 
 """class TerminalView:
     Affichage propre et stable dans le terminal.
@@ -243,7 +244,7 @@ class TerminalView(View):
         if k == 'q':
             # arrête la vue (main doit détecter et arrêter la boucle si besoin)
             self.stop()
-            return "QUIT"
+            return "quit"
 
         # Certains terminaux n'envoyent pas F9 comme code simple,
         # on laisse aussi la touche '9' et ESC comme fallback

@@ -4,9 +4,12 @@ import os
 FILENAME = "history.html"
 
 def init_history_file():
-    """Initialise le fichier avec l'image épique et le Dashboard."""
-    with open(FILENAME, "w", encoding="utf-8") as f:
-        f.write("""<!DOCTYPE html>
+    """Initialise le fichier (Version sans tableau des scores)."""
+    # Si le fichier existe déjà, on ne touche à rien
+    if os.path.exists(FILENAME):
+        return
+
+    html_content = """<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset='utf-8'>
@@ -23,7 +26,6 @@ def init_history_file():
         
         body {
             background-color: var(--bg);
-            /* RETOUR DE L'IMAGE DE FOND ÉPIQUE */
             background-image: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0.8)), url('https://images.unsplash.com/photo-1542751371-adc38448a05e?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80');
             background-size: cover;
             background-attachment: fixed;
@@ -34,27 +36,6 @@ def init_history_file():
             padding: 40px;
             min-height: 100vh;
         }
-
-        /* --- DASHBOARD DU HAUT --- */
-        .dashboard-container {
-            max-width: 1000px;
-            margin: 0 auto 50px auto;
-            background: rgba(0,0,0,0.6); /* Un peu plus sombre pour le contraste */
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 16px;
-            padding: 20px;
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            align-items: center;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-        }
-
-        .dash-stat { text-align: center; }
-        .dash-label { font-family: 'Rajdhani'; text-transform: uppercase; color: #aaa; font-size: 0.9rem; letter-spacing: 2px; }
-        .dash-value { font-size: 2.5rem; font-weight: 900; margin-top: 5px; }
-        .score-cyan { color: var(--cyan); text-shadow: 0 0 20px var(--cyan); }
-        .score-mag { color: var(--magenta); text-shadow: 0 0 20px var(--magenta); }
 
         /* TITRE */
         h1 {
@@ -69,7 +50,7 @@ def init_history_file():
         }
 
         /* TIMELINE */
-        .timeline { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 25px; }
+        .timeline { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column-reverse; gap: 25px; }
 
         /* CARTE MATCH */
         .match-card {
@@ -129,25 +110,16 @@ def init_history_file():
 
     <h1>MEDIEVALI <span style="font-weight:300; opacity:0.5">CHAMPIONSHIP</span></h1>
 
-    <div class="dashboard-container">
-        <div class="dash-stat">
-            <div class="dash-label">Victoires Équipe 1 (Bleu)</div>
-            <div class="dash-value score-cyan" id="score-c">0</div>
-        </div>
-        <div class="dash-stat">
-            <div class="dash-label">Leader Actuel</div>
-            <div class="dash-value" style="font-size:1.5rem; color:#fff" id="status-txt">EN COURS</div>
-        </div>
-        <div class="dash-stat">
-            <div class="dash-label">Victoires Équipe 2 (Rouge)</div>
-            <div class="dash-value score-mag" id="score-m">0</div>
-        </div>
-    </div>
-
     <div class="timeline">
-""")
+"""
+    with open(FILENAME, "w", encoding="utf-8") as f:
+        f.write(html_content)
 
 def add_fight_history(p1_name, p2_name, ia1, ia2, u1_start, u2_start, winner, duration, survivors_data):
+    # Sécurité : Si le fichier n'existe pas, on le crée
+    if not os.path.exists(FILENAME):
+        init_history_file()
+
     now = datetime.datetime.now().strftime("%H:%M")
     
     count_p1 = len([s for s in survivors_data if s[1] == p1_name])
@@ -172,7 +144,7 @@ def add_fight_history(p1_name, p2_name, ia1, ia2, u1_start, u2_start, winner, du
     if survivors_data:
         for symbol, team in survivors_data:
             css = "ub-c" if team == p1_name else "ub-m"
-            icon = "♞" if "K" in symbol else "♟"
+            icon = "♞" if "K" in str(symbol) else "♟"
             badges += f"<span class='u-badge {css}'><span class='ub-icon'>{icon}</span>{symbol}</span>"
     else:
         badges = "<span style='color:#555; font-size:0.8em'>☠️ Destruction Totale</span>"
@@ -213,20 +185,6 @@ def add_fight_history(p1_name, p2_name, ia1, ia2, u1_start, u2_start, winner, du
                 </div>
             </details>
         </div>
-        
-        <script>
-            (function() {{
-                let winsC = document.querySelectorAll('.match-card[data-winner="cyan"]').length;
-                let winsM = document.querySelectorAll('.match-card[data-winner="magenta"]').length;
-                document.getElementById('score-c').innerText = winsC;
-                document.getElementById('score-m').innerText = winsM;
-                
-                let status = document.getElementById('status-txt');
-                if (winsC > winsM) {{ status.innerText = "ÉQUIPE 1 MÈNE"; status.style.color = "#00f2ff"; }}
-                else if (winsM > winsC) {{ status.innerText = "ÉQUIPE 2 MÈNE"; status.style.color = "#ff0055"; }}
-                else {{ status.innerText = "ÉGALITÉ"; status.style.color = "#fff"; }}
-            }})();
-        </script>
-    """
+        """
     with open(FILENAME, "a", encoding="utf-8") as f:
         f.write(html)
