@@ -14,10 +14,12 @@ from src.core.units import UnitType
 from src.core.scenario import get_scenario
 from src.ai import get_general
 from src.vis.terminal_view import TerminalView
+from src.vis.gui_view import IsometricView
 from src.core.battle import Battle
 import time
 import math
 import random
+import pygame
 FPS = 20
 FRAME_DELAY = 1 / FPS
 
@@ -39,6 +41,8 @@ def build_parser():
     run.add_argument("ai_a", type=str)
     run.add_argument("ai_b", type=str)
     run.add_argument("-t", "--terminal", action="store_true")
+    run.add_argument(
+    "-d", "--data",type=str,default=None,help="Chemin du fichier où écrire les données de la bataille")
 
     plot = sub.add_parser("plot", help="Lancer une expérimentation et tracer")
     plot.add_argument("ai", type=str)
@@ -85,10 +89,13 @@ def run_battle(args):
 
     battle = Battle(players=players, world_map=world_map, logic_dt=0.05, max_time=60)
 
-    viewer = TerminalView() if args.terminal else None
+    viewer = TerminalView() if args.terminal else IsometricView()
     if viewer:
         viewer.on_enter(battle, battle.get_state())
-
+    if isinstance(viewer, IsometricView):
+        screen = pygame.display.set_mode((1800, 1000))
+    
+    
     running = True
     print("🚀 Démarrage du combat...")
 
@@ -97,12 +104,23 @@ def run_battle(args):
         battle.update()
         game_state = battle.get_state()
 
-        if viewer:
-            action = viewer.handle_input()
-            if action == "quit":
-                running = False
+        action = viewer.handle_input()
 
-            viewer.render(game_state)
+        if action == "quit":
+            running = False
+
+        elif action == "switch_view":
+            viewer.on_exit()
+
+            if isinstance(viewer, TerminalView):
+                viewer = IsometricView()
+            else:
+                viewer = TerminalView()
+
+            viewer.on_enter(battle, game_state)
+
+        # 3️⃣ rendu
+        viewer.render(game_state)
 
         time.sleep(FRAME_DELAY)
 

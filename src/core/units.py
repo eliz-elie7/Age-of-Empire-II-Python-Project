@@ -97,29 +97,60 @@ class Unit:
         return self.current_hp > 0
     # ===== UPDATE PRINCIPALE =====
 
+    def _apply_soft_separation(self, battle, delta_time: float):
+        """Remplace le jitter brutal par une répulsion douce entre unités."""
+        all_units = battle.all_units()
+        push_force_x = 0
+        push_force_y = 0
+        
+        for other in all_units:
+            if other is self:
+                continue
+            
+            dx = self.x - other.x
+            dy = self.y - other.y
+            dist_sq = dx*dx + dy*dy
+            
+            # Rayon de collision combiné
+            min_dist = (self.get_collision_radius() + other.get_collision_radius()) * 0.8
+            
+            if dist_sq < min_dist * min_dist and dist_sq > 0:
+                dist = math.sqrt(dist_sq)
+                # Force de répulsion : plus on est proche, plus on pousse
+                overlap = min_dist - dist
+                push_force_x += (dx / dist) * overlap
+                push_force_y += (dy / dist) * overlap
+
+        # Appliquer la poussée progressivement (on lisse avec delta_time)
+        if push_force_x != 0 or push_force_y != 0:
+            speed_factor = 2.0 # Ajuste pour plus ou moins de nervosité
+            nx = self.x + push_force_x * delta_time * speed_factor
+            ny = self.y + push_force_y * delta_time * speed_factor
+            
+            # On vérifie juste les limites de la map
+            self.x, self.y = battle.world_map.clamp_position(nx, ny)
+
     def update(self, battle, delta_time: float):
         if not self.is_alive:
             return
 
-        # cooldowns
         self.attack_cooldown = max(0.0, self.attack_cooldown - delta_time)
 
-        # windup attaque
+        # 1. Si on attaque (windup), on est "ancré" au sol, pas de mouvement
         if self.attack_windup_timer > 0:
             self.attack_windup_timer -= delta_time
             if self.attack_windup_timer <= 0:
                 target = self._order_data.get("target")
                 if target and target.is_alive:
-                    target.take_damage(self.get_attack(), "melee")
+                    dmg = max(1, self.get_attack() - target.get_melee_armor())
+                    target.take_damage(dmg, "melee")
             return
 
-        # anti idle
-        self.idle_timer += delta_time
-        if self._current_order is None and self.idle_timer > 1.5:
-            self._jitter(battle)
-            self.idle_timer = 0.0
+        # 2. Séparation douce (remplace le jitter)
+        # On l'applique presque tout le temps pour que les unités ne s'empilent jamais
+        self._apply_soft_separation(battle, delta_time)
 
-        # exécution ordre
+        # 3. Exécution des ordres
         if self._current_order == "move":
             self._execute_move_order(delta_time, battle)
         elif self._current_order == "attack":
@@ -145,12 +176,20 @@ class Unit:
             return
 
         dist = self.distance_to(target)
+        
+        # FORMULE : Portée de la stat + Rayon de l'attaquant + Rayon de la cible
+        # On ajoute 2 pixels de marge pour la précision des flottants
+        visual_overlap = 5.0 # pour gerer le chevauchement visuel
+        effective_range = (self.get_range() + 
+                  self.get_collision_radius() + 
+                  target.get_collision_radius()) - visual_overlap
 
-        if dist <= self.get_range():
+        if dist <= effective_range:
             if self.attack_cooldown <= 0:
                 self.attack_windup_timer = self.get_attack_windup()
                 self.attack_cooldown = self.get_reload_time()
         else:
+            # Si on est trop loin, on avance
             self.move_toward(target.x, target.y, delta_time, battle)
 
     # ===== MOUVEMENT =====
@@ -171,8 +210,8 @@ class Unit:
 
         if world_map and world_map.can_move_to(self, nx, ny, all_units):
             self.x, self.y = world_map.clamp_position(nx, ny)
-        else:
-            self._jitter(battle)
+        #else:
+        #    self._jitter(battle)
 
     def _jitter(self, battle):
         world_map = getattr(battle, "world_map", None)
@@ -196,16 +235,16 @@ class Unit:
 # ===== UNITÉS =====
 
 class Knight(Unit):
-    def get_max_hp(self): return 100
-    def get_attack(self): return 10
-    def get_melee_armor(self): return 2
+    def get_max_hp(self): return 100 
+    def get_attack(self): return 8 
+    def get_melee_armor(self): return 2 
     def get_pierce_armor(self): return 2
-    def get_range(self): return 1.0 * TILE
-    def get_reload_time(self): return 1.5
-    def get_speed(self): return 1.35 * TILE
-    def get_line_of_sight(self): return 6.0 * TILE
-    def get_symbol(self): return "K"
-    def get_collision_radius(self): return 0.5 * TILE
+    def get_range(self): return 0.01 * TILE 
+    def get_reload_time(self): return 1.8 
+    def get_speed(self): return 1.35 * TILE 
+    def get_line_of_sight(self): return 4.0 * TILE 
+    def get_symbol(self): return "K" 
+    def get_collision_radius(self): return 0.5 * TILE 
     def get_attack_windup(self): return 0.15
 
 class Pikeman(Unit):
@@ -213,23 +252,23 @@ class Pikeman(Unit):
     def get_attack(self): return 4
     def get_melee_armor(self): return 0
     def get_pierce_armor(self): return 0
-    def get_range(self): return 1.0 * TILE
+    def get_range(self): return 0.01 * TILE
     def get_reload_time(self): return 3.0
     def get_speed(self): return 1.0 * TILE
-    def get_line_of_sight(self): return 5.0 * TILE
+    def get_line_of_sight(self): return 4.0 * TILE
     def get_symbol(self): return "P"
     def get_collision_radius(self): return 0.45 * TILE
     def get_attack_windup(self): return 0.20
 
 class Crossbowman(Unit):
     def get_max_hp(self): return 35
-    def get_attack(self): return 6
+    def get_attack(self): return 5
     def get_melee_armor(self): return 0
-    def get_pierce_armor(self): return 1
-    def get_range(self): return 4.5 * TILE
+    def get_pierce_armor(self): return 0
+    def get_range(self): return 5 * TILE
     def get_reload_time(self): return 2.0
     def get_speed(self): return 0.96 * TILE
-    def get_line_of_sight(self): return 8.0 * TILE
+    def get_line_of_sight(self): return 7.0 * TILE
     def get_symbol(self): return "C"
     def get_collision_radius(self): return 0.45 * TILE
     def get_attack_windup(self): return 0.30

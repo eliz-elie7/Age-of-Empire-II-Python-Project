@@ -99,7 +99,9 @@ def lanchester_scenario(unit_type, N, general_a, general_b):
     """
 
     player_a = Player("Army A", general_a)
+    player_a.color = "Blue"
     player_b = Player("Army B", general_b)
+    player_b.color = "Red"
 
     world_map = Map(width = 120 * TILE, height = 120 * TILE,collision_allowance=0.2)
     all_units = []
@@ -174,6 +176,7 @@ def mirror_scenario(general_a, general_b):
     Deux armées strictement symétriques
     """
     player_a = Player("Army A", general_a)
+
     player_b = Player("Army B", general_b)
 
     world_map = Map(120 * TILE, 60 * TILE)
