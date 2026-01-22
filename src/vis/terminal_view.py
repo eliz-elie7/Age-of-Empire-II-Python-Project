@@ -260,5 +260,5 @@ class TerminalView(View):
 
     # -------------------------
     # Rétrocompatibilité avec l'ancien code qui appelait draw(state, world_map)
-    # -------------------------
-   
+    # -----------------------
+    

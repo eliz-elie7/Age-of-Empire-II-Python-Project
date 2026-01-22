@@ -338,3 +338,103 @@
             })();
         </script>
     
+        <div class="match-card " data-winner="draw">
+            <div class="m-header">
+                <span>MATCH #663</span>
+                <span>⏱ 60.0s</span>
+                <span>23:41</span>
+            </div>
+            
+            <div class="hp-bar">
+                <div class="hp-fill-c" style="width:60.60606060606061%"></div>
+                <div class="hp-fill-m" style="width:39.39393939393939%"></div>
+            </div>
+
+            <div class="m-content">
+                <div class="m-player">
+                    <div class="mp-name" style="color:var(--cyan)">Army A</div>
+                    <div class="mp-info">braindead • 20 Unités</div>
+                    <span class='tag tag-lose'>DÉFAITE</span>
+                </div>
+                
+                <div class="m-vs">VS</div>
+                
+                <div class="m-player">
+                    <div class="mp-name" style="color:var(--magenta)">Army B</div>
+                    <div class="mp-info">daft • 20 Unités</div>
+                    <span class='tag tag-lose'>DÉFAITE</span>
+                </div>
+            </div>
+
+            <details>
+                <summary>Forces Restantes (33) ▼</summary>
+                <div class="badge-list">
+                    <span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span>
+                </div>
+            </details>
+        </div>
+        
+        <script>
+            (function() {
+                let winsC = document.querySelectorAll('.match-card[data-winner="cyan"]').length;
+                let winsM = document.querySelectorAll('.match-card[data-winner="magenta"]').length;
+                document.getElementById('score-c').innerText = winsC;
+                document.getElementById('score-m').innerText = winsM;
+                
+                let status = document.getElementById('status-txt');
+                if (winsC > winsM) { status.innerText = "ÉQUIPE 1 MÈNE"; status.style.color = "#00f2ff"; }
+                else if (winsM > winsC) { status.innerText = "ÉQUIPE 2 MÈNE"; status.style.color = "#ff0055"; }
+                else { status.innerText = "ÉGALITÉ"; status.style.color = "#fff"; }
+            })();
+        </script>
+    
+        <div class="match-card " data-winner="draw">
+            <div class="m-header">
+                <span>MATCH #112</span>
+                <span>⏱ 60.0s</span>
+                <span>23:48</span>
+            </div>
+            
+            <div class="hp-bar">
+                <div class="hp-fill-c" style="width:60.60606060606061%"></div>
+                <div class="hp-fill-m" style="width:39.39393939393939%"></div>
+            </div>
+
+            <div class="m-content">
+                <div class="m-player">
+                    <div class="mp-name" style="color:var(--cyan)">Army A</div>
+                    <div class="mp-info">braindead • 20 Unités</div>
+                    <span class='tag tag-lose'>DÉFAITE</span>
+                </div>
+                
+                <div class="m-vs">VS</div>
+                
+                <div class="m-player">
+                    <div class="mp-name" style="color:var(--magenta)">Army B</div>
+                    <div class="mp-info">daft • 20 Unités</div>
+                    <span class='tag tag-lose'>DÉFAITE</span>
+                </div>
+            </div>
+
+            <details>
+                <summary>Forces Restantes (33) ▼</summary>
+                <div class="badge-list">
+                    <span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-c'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span><span class='u-badge ub-m'><span class='ub-icon'>♞</span>K</span>
+                </div>
+            </details>
+        </div>
+        
+        <script>
+            (function() {
+                let winsC = document.querySelectorAll('.match-card[data-winner="cyan"]').length;
+                let winsM = document.querySelectorAll('.match-card[data-winner="magenta"]').length;
+                document.getElementById('score-c').innerText = winsC;
+                document.getElementById('score-m').innerText = winsM;
+                
+                let status = document.getElementById('status-txt');
+                if (winsC > winsM) { status.innerText = "ÉQUIPE 1 MÈNE"; status.style.color = "#00f2ff"; }
+                else if (winsM > winsC) { status.innerText = "ÉQUIPE 2 MÈNE"; status.style.color = "#ff0055"; }
+                else { status.innerText = "ÉGALITÉ"; status.style.color = "#fff"; }
+            })();
+        </script>
+    

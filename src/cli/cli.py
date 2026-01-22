@@ -1,135 +1,171 @@
 """
 CLI (Command Line Interface) du projet MedievAIl.
 """
-from __future__ import annotations
-import argparse
-import time
-import sys
 
-# --- IMPORTS ---
+from __future__ import annotations
+# src/cli.py
+import argparse
+from src.core.units import UnitType
 from src.core.scenario import get_scenario
 from src.ai import get_general
 from src.vis.terminal_view import TerminalView
+from src.vis.gui_view import IsometricView
 from src.core.battle import Battle
+import time
+import math
+import random
+import pygame
 
-# On importe ta fonction qui génère ET ouvre le fichier
-from src.core.html_generator import generate_snapshot_html
-from src.core.history import add_fight_history, init_history_file
+# --- AJOUT 1 : L'IMPORT ---
+from src.data_exporter import save_battle_report 
+
+FPS = 20
+FRAME_DELAY = 1 / FPS
 
 # ============================================================
-# ARGS
+# CLI arguments parsing
 # ============================================================
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="Medievail")
+    parser = argparse.ArgumentParser(
+        description="Medievail — moteur de bataille"
+    )
+
     sub = parser.add_subparsers(dest="command", required=True)
+
     run = sub.add_parser("run", help="Lancer une bataille")
     run.add_argument("scenario", type=str)
     run.add_argument("ai_a", type=str)
     run.add_argument("ai_b", type=str)
     run.add_argument("-t", "--terminal", action="store_true")
+    # Ton argument est déjà là, c'est parfait :
+    run.add_argument(
+    "-d", "--data",type=str,default=None,help="Chemin du fichier où écrire les données de la bataille")
+
+    plot = sub.add_parser("plot", help="Lancer une expérimentation et tracer")
+    plot.add_argument("ai", type=str)
+    plot.add_argument("plotter", type=str)
+    plot.add_argument("scenario", type=str)
+    plot.add_argument("unit_types", type=str)
+    plot.add_argument("N_range", type=str)
+    plot.add_argument("-N", "--repeats", type=int, default=10)
+
     return parser
 
+
 # ============================================================
-# EXECUTION PRINCIPALE
+# Affichage des résultats
+# ============================================================
+
+def print_battle_summary(battle: Battle):
+    print("\n" + "=" * 50)
+    print("BATTLE FINISHED")
+    print("=" * 50)
+    print(f"Simulated time : {battle.time:.2f}s")
+
+    if battle.winner:
+        print(f"Winner         : {battle.winner.name}")
+        print(f"Remaining units: {len(battle.winner.squad)}")
+    else:
+        print("Result         : DRAW (time limit reached)")
+    print("=" * 50)
+
+
+# ============================================================
+# Exécution principale
 # ============================================================
 
 def run_battle(args):
-    # 1. Setup
     scenario_fn = get_scenario(args.scenario)
-    general_a = get_general(args.ai_a)
-    general_b = get_general(args.ai_b)
-    players, world_map = scenario_fn(general_a, general_b)
-    battle = Battle(players=players, world_map=world_map)
-    start_counts = {p.name: len(p.squad) for p in players}
 
-    viewer = TerminalView() if args.terminal else None 
-    running = True
+    general_a = get_general(args.ai_a)()
+    general_b = get_general(args.ai_b)()
+
+    players, world_map = scenario_fn(UnitType.KNIGHT, 2, general_a, general_b)
+
+    battle = Battle(players=players, world_map=world_map, logic_dt=0.05, max_time=60)
+
+    viewer = TerminalView() if args.terminal else IsometricView()
+    if viewer:
+        viewer.on_enter(battle, battle.get_state())
+    if isinstance(viewer, IsometricView):
+        screen = pygame.display.set_mode((1800, 1000))
     
-    print(f"⚔️  DÉBUT : {players[0].name} vs {players[1].name}")
-    print("👉 Appuyez sur [TAB] pour voir le HUD Tactique.")
+    running = True
+    print("🚀 Démarrage du combat...")
 
     while not battle.finished and running:
-        # A. Update
+
         battle.update()
-        state = battle.get_state()
-        
-        # B. Gestion des entrées
-        action = None
-        if viewer:
-            action = viewer.handle_input()
-        
-        if action == "QUIT":
+        game_state = battle.get_state()
+
+        action = viewer.handle_input()
+
+        if action == "quit":
             running = False
-            
-        # --- C'EST ICI QUE CA SE PASSE : TOUCHE TAB ---
-        elif action == "\t": 
-            print("\n" + "="*40)
-            print("⏸  PAUSE TACTIQUE ACTIVÉE")
-            
-            # 1. On lance ta fonction (Génère + Ouvre le navigateur)
-            try:
-                print("Génération et ouverture du HUD...")
-                generate_snapshot_html(battle.players, battle.time)
-            except Exception as e:
-                print(f"⚠️ Erreur : {e}")
 
-            print("--> Jeu en pause. Appuyez sur [TAB] pour reprendre.")
-            print("="*40 + "\n")
+        elif action == "switch_view":
+            viewer.on_exit()
 
-            # 2. Boucle de pause (on bloque ici tant qu'on ne re-clique pas sur TAB)
-            paused = True
-            while paused and running:
-                if viewer:
-                    # On écoute le clavier
-                    pause_act = viewer.handle_input()
-                    
-                    # Si on appuie encore sur TAB, on sort de la boucle
-                    if pause_act == "\t": 
-                        paused = False
-                        print("▶️  REPRISE DU COMBAT")
-                    elif pause_act == "QUIT": 
-                        running = False
-                        paused = False
-                
-                # Petite attente pour ne pas surcharger le CPU pendant la pause
-                time.sleep(0.1)
+            if isinstance(viewer, TerminalView):
+                viewer = IsometricView()
+            else:
+                viewer = TerminalView()
 
-        # C. Affichage
-        if running and viewer:
-            viewer.render(state)    
+            viewer.on_enter(battle, game_state)
 
-        time.sleep(0.04)
+        # 3️⃣ rendu
+        viewer.render(game_state)
 
-    # --- FIN DU COMBAT ---
-    print("\nCombat terminé !")
-    winner_name = battle.winner.name if battle.winner else "DRAW"
-    
-    # Gestion de l'historique (inchangé)
-    survivors_data = []
-    for p in battle.players:
-        for u in p.squad:
-            if u.current_hp > 0:
-                survivors_data.append((u.get_symbol(), p.name))
-    
-    try:
-        with open("history.html", "r") as f: pass
-    except FileNotFoundError:
-        init_history_file()
+        time.sleep(FRAME_DELAY)
+
+    print("Combat terminé")
+    if battle.winner:
+        print("Vainqueur :", battle.winner.name)
+        print_battle_summary(battle)
+
+    # --- AJOUT 2 : SAUVEGARDE SI DEMANDÉ ---
+    if args.data:
+        save_battle_report(args.data, battle, args)
+
+
+def run_plot(args):
+    from src.core.scenario import run_lanchester_experiment
+    from src.core.plot import get_plotter
+    from src.core.units import UnitType
+
+    unit_types = [
+        UnitType[u.strip().upper()]
+        for u in args.unit_types.strip("[]").split(",")
+    ]
 
     try:
-        add_fight_history(players[0].name, players[1].name, args.ai_a, args.ai_b, 
-                          start_counts[players[0].name], start_counts[players[1].name], 
-                          winner_name, battle.time, survivors_data)
-        print("📜 Rapport ajouté à l'historique.")
-    except Exception:
-        pass
+        start, end = args.N_range.split(":")
+        N_range = range(int(start), int(end))
+    except ValueError:
+        raise ValueError(
+            "Format invalide pour N_range. Utilise start:end (ex: 1:100)"
+        )
+
+    data = run_lanchester_experiment(
+        general_name=args.ai,
+        unit_types=unit_types,
+        N_range=N_range,
+        repeats=args.repeats
+    )
+
+    plotter = get_plotter(args.plotter)
+    plotter.plot(data)
+
 
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+
     if args.command == "run":
         run_battle(args)
+    elif args.command == "plot":
+        run_plot(args)
 
 if __name__ == "cli_main":
     main()
