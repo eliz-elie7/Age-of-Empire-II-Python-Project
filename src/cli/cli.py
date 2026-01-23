@@ -120,6 +120,7 @@ def run_battle(args):
         # --- HTML 1 : HUD TACTIQUE (Touche TAB) ---
         elif action == "\t": # Touche TAB renvoyée par la vue
             print("\n⏸  PAUSE TACTIQUE")
+            time.sleep(0.3)
             try:
                 generate_snapshot_html(battle.players, battle.time)
             except Exception as e:
