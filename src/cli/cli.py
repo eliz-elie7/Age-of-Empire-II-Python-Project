@@ -10,6 +10,7 @@ import pygame
 from src.core.units import UnitType
 from src.core.scenario import get_scenario
 from src.ai import get_general
+
 from src.core.battle import Battle
 
 # --- Imports Visuels ---
@@ -17,9 +18,13 @@ from src.vis.terminal_view import TerminalView
 from src.vis.gui_view import IsometricView
 
 # --- LES 3 FICHIERS HTML ---
-from src.core.html_generator import generate_snapshot_html  # 1. HUD Tactique (TAB)
-from src.data_exporter import save_battle_report            # 2. Export Données (-d)
-from src.core.history import add_fight_history              # 3. Historique (Auto)
+from src.fichiers.html_generator import generate_snapshot_html  # 1. HUD Tactique (TAB)
+from src.fichiers.data_exporter import save_battle_report            # 2. Export Données (-d)
+from src.fichiers.history import add_fight_history              # 3. Historique (Auto)
+
+
+
+
 
 FPS = 20
 FRAME_DELAY = 1 / FPS
@@ -79,7 +84,7 @@ def run_battle(args):
     # C'est ICI que ça change pour éviter le bug Lanchester
     try:
         # Tentative 1 : Scénario complexe (ex: Lanchester) -> 4 arguments
-        players, world_map = scenario_fn(UnitType.KNIGHT, 2, general_a, general_b)
+        players, world_map = scenario_fn(UnitType.KNIGHT, 5, general_a, general_b)
     except TypeError:
         # Tentative 2 : Scénario simple (ex: map1, random) -> 2 arguments
         players, world_map = scenario_fn(general_a, general_b)
@@ -140,6 +145,25 @@ def run_battle(args):
                 
                 if not isinstance(viewer, IsometricView):
                     time.sleep(0.1)
+        # --- GESTION SAUVEGARDE (F11) ---
+        elif action == "save":
+            battle.save_state()  # Appelle la méthode qu'on a créée dans Battle
+            time.sleep(0.2)      # Petit délai pour éviter de sauvegarder 10 fois par seconde
+
+        # --- GESTION CHARGEMENT (F12) ---
+        elif action == "load":
+            loaded_battle = Battle.load_state() # Charge le fichier
+            
+            if loaded_battle:
+                # REMPLACEMENT CRITIQUE : L'ancienne bataille est écrasée par la nouvelle
+                battle = loaded_battle 
+                
+                # IMPORTANT : On dit à la vue de se mettre à jour avec la nouvelle bataille
+                if viewer:
+                    viewer.on_enter(battle, battle.get_state())
+                
+                time.sleep(0.2)
+
 
         # Rendu normal
         viewer.render(game_state)

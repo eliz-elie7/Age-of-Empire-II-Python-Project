@@ -1,6 +1,8 @@
 # src/core/battle.py
 
 import math
+import pickle
+import os
 from typing import List, Dict, Any, Optional
 
 
@@ -26,6 +28,34 @@ class Battle:
         self.finished = False
         self.winner = None
         self.step_count = 0
+
+    # --------------------------------------------------
+    # SAUVEGARDE & CHARGEMENT (Nouveau)
+    # --------------------------------------------------
+    def save_state(self, filename="quicksave.pkl"):
+        """Sauvegarde l'état complet de la bataille dans un fichier."""
+        try:
+            with open(filename, "wb") as f:
+                pickle.dump(self, f)
+            print(f"✅ [SYSTEM] Partie sauvegardée dans '{filename}'")
+        except Exception as e:
+            print(f"❌ [SYSTEM] Erreur de sauvegarde : {e}")
+
+    @staticmethod
+    def load_state(filename="quicksave.pkl"):
+        """Charge une bataille depuis un fichier et retourne l'objet Battle."""
+        if not os.path.exists(filename):
+            print(f"⚠️ [SYSTEM] Aucun fichier de sauvegarde trouvé : '{filename}'")
+            return None
+        
+        try:
+            with open(filename, "rb") as f:
+                battle = pickle.load(f)
+            print(f"📂 [SYSTEM] Partie chargée depuis '{filename}'")
+            return battle
+        except Exception as e:
+            print(f"❌ [SYSTEM] Erreur de chargement : {e}")
+            return None
 
     # --------------------------------------------------
     # UNITÉS
