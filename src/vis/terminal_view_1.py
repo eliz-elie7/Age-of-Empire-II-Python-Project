@@ -1,5 +1,4 @@
 import curses
-from time import sleep
 from .view_base import View
 
 #Valeur à mofifier selon si on veut plus ou moins de place pour afficher les infos de jeu
