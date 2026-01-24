@@ -18,9 +18,6 @@ from src.vis.terminal_view import TerminalView
 from src.vis.gui_view import IsometricView
 
 # --- LES 3 FICHIERS HTML ---
-from src.fichiers.html_generator import generate_snapshot_html  # 1. HUD Tactique (TAB)
-from src.fichiers.data_exporter import save_battle_report            # 2. Export Données (-d)
-from src.fichiers.history import add_fight_history              # 3. Historique (Auto)
 
 
 
@@ -116,19 +113,20 @@ def run_battle(args):
         pygame.display.set_mode((1800, 1000))
     
     running = True
+    is_paused = False
     print(f"🚀 Démarrage : {players[0].name} vs {players[1].name}")
     print("👉 Appuyez sur [TAB] pour le HUD Tactique.")
 
     # --- BOUCLE PRINCIPALE ---
-    while not battle.finished and running:
-        battle.update()
-        game_state = battle.get_state()
-        
+    while not battle.finished and running:        
         # Gestion des Inputs
         action = viewer.handle_input()
 
         if action == "quit":
             running = False
+        
+        if action == "Pause":
+            is_paused = not is_paused
 
         elif action == "switch_view":
             viewer.on_exit()
@@ -137,27 +135,17 @@ def run_battle(args):
             
         # --- HTML 1 : HUD TACTIQUE (Touche TAB) ---
         elif action == "\t": # Touche TAB renvoyée par la vue
-            print("\n⏸  PAUSE TACTIQUE")
-            time.sleep(0.3)
-            try:
-                generate_snapshot_html(battle.players, battle.time)
-            except Exception as e:
-                print(f"⚠️ Erreur HUD : {e}")
-            
-            # Boucle de pause
-            paused = True
-            while paused and running:
-                if isinstance(viewer, IsometricView):
-                    viewer.render(game_state)
-                    # Petit tick pour ne pas bloquer l'OS
-                    pygame.event.pump() 
-                
-                pause_act = viewer.handle_input()
-                if pause_act == "\t": paused = False
-                elif pause_act == "quit": running = False; paused = False
-                
-                if not isinstance(viewer, IsometricView):
-                    time.sleep(0.1)
+            is_paused = True
+
+            if is_paused :
+                print("\n⏸  PAUSE TACTIQUE")
+                time.sleep(0.3)
+                try:
+                    from src.fichiers.html_generator import generate_snapshot_html  # 1. HUD Tactique (TAB)
+                    generate_snapshot_html(battle.players, battle.time)
+                except Exception as e:
+                    print(f"⚠️ Erreur HUD : {e}")
+
         # --- GESTION SAUVEGARDE (F11) ---
         elif action == "save":
             battle.save_state()  # Appelle la méthode qu'on a créée dans Battle
@@ -177,6 +165,14 @@ def run_battle(args):
                 
                 time.sleep(0.2)
 
+        #mise a jour de la map
+        if not is_paused:
+            battle.update()
+            game_state = battle.get_state()
+        else:
+            if isinstance(viewer, IsometricView):
+                pygame.event.pump()
+
 
         # Rendu normal
         viewer.render(game_state)
@@ -187,6 +183,7 @@ def run_battle(args):
 
     # --- HTML 2 : EXPORT DONNÉES (-d) ---
     if args.data:
+        from src.fichiers.data_exporter import save_battle_report            # 2. Export Données (-d)
         save_battle_report(args.data, battle, args)
 
     # --- HTML 3 : HISTORIQUE AUTOMATIQUE ---
@@ -199,6 +196,7 @@ def run_battle(args):
                 survivors_data.append((sym, p.name))
     
     try:
+        from src.fichiers.history import add_fight_history              # 3. Historique (Auto)
         add_fight_history(
             p1_name=players[0].name,
             p2_name=players[1].name,
@@ -316,6 +314,7 @@ def run_load(args):
             print("\n⏸  PAUSE TACTIQUE")
             time.sleep(0.3)
             try:
+                from src.fichiers.html_generator import generate_snapshot_html  # 1. HUD Tactique (TAB)
                 generate_snapshot_html(battle.players, battle.time)
             except Exception as e:
                 print(f"⚠️ Erreur HUD : {e}")
