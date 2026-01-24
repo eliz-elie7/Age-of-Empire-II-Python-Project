@@ -324,6 +324,12 @@ def create_unit(unit_type: UnitType, x: float, y: float, player) -> Unit:
         return Pikeman(x, y, player)
     if unit_type == UnitType.CROSSBOWMAN:
         return Crossbowman(x, y, player)
+    # --- NOUVEAUX ---
+    if unit_type == UnitType.LONGSWORDSMAN:
+        return LongSwordsman(x, y, player)
+    if unit_type == UnitType.ELITESKIRMISHER:
+        return EliteSkirmisher(x, y, player)
+        
     raise ValueError(f"Type d'unité inconnu: {unit_type}")
 
 
