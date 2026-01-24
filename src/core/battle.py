@@ -2,6 +2,21 @@
 
 import math
 from typing import List, Dict, Any, Optional
+import os
+import pickle
+from dataclasses import dataclass
+from typing import Optional
+import time
+
+
+
+@dataclass
+class BattleResult:
+    winner: Optional[str]
+    turns: int
+    duration: float
+    remaining_units: int
+
 
 
 class Battle:
@@ -14,7 +29,7 @@ class Battle:
         players: List,
         world_map,
         logic_dt: float = 0.05,
-        max_time: float = 60.0
+        max_time: float = 120.0
     ):
         self.players = players
         self.map = world_map
@@ -212,3 +227,53 @@ class Battle:
             })
 
         return result
+    
+    #Save and Load
+    def save_state(self, filename="quicksave.pkl"):
+        """Sauvegarde l'état complet de la bataille dans un fichier."""
+        try:
+            with open(filename, "wb") as f:
+                pickle.dump(self, f)
+            print(f"✅ [SYSTEM] Partie sauvegardée dans '{filename}'")
+        except Exception as e:
+            print(f"❌ [SYSTEM] Erreur de sauvegarde : {e}")
+
+    @staticmethod
+    def load_state(filename="quicksave.pkl"):
+        """Charge une bataille depuis un fichier et retourne l'objet Battle."""
+        if not os.path.exists(filename):
+            print(f"⚠️ [SYSTEM] Aucun fichier de sauvegarde trouvé : '{filename}'")
+            return None
+        
+        try:
+            with open(filename, "rb") as f:
+                battle = pickle.load(f)
+            print(f"📂 [SYSTEM] Partie chargée depuis '{filename}'")
+            return battle
+        except Exception as e:
+            print(f"❌ [SYSTEM] Erreur de chargement : {e}")
+            return None
+   
+    # ----Pour le tournoi cli----
+
+    def run(self) -> BattleResult:
+        start = time.time()
+
+        while not self.finished:
+            self.update()   # ✅ pas step()
+
+        duration = time.time() - start
+
+        if self.winner:
+            remaining = len([u for u in self.winner.squad if u.current_hp > 0])
+            winner_name = self.winner.name
+        else:
+            remaining = 0
+            winner_name = None
+
+        return BattleResult(
+            winner=winner_name,
+            turns=self.step_count,   # ✅ cohérent
+            duration=duration,
+            remaining_units=remaining
+        )

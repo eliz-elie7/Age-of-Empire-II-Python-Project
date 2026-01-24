@@ -122,6 +122,8 @@ class IsometricView(View):
             if event.type == pygame.QUIT:
                 self.exit_game()
                 return "quit"
+            if event.type == pygame.K_TAB:
+                return "\t"
 
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_ESCAPE, pygame.K_q):
@@ -133,7 +135,12 @@ class IsometricView(View):
                 if event.key == pygame.K_F2: self.ui_mode = 1
                 if event.key == pygame.K_F3: self.ui_mode = 2
                 if event.key == pygame.K_F4: self.ui_mode = 3
-                
+               
+                # Pour le save / load 
+                if event.key == pygame.K_TAB : return "\t"
+                if event.key == pygame.K_F11 : return "save"
+                if  event.key == pygame.K_F12 : return "load"
+            
                 if event.key == pygame.K_F9: return "switch_view"
                 if event.key == pygame.K_c: self.center_on_units()
                 if event.key == pygame.K_f: self.auto_follow = not self.auto_follow

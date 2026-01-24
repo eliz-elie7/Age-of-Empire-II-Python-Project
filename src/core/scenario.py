@@ -171,38 +171,75 @@ def lanchester_scenario(unit_type, N, general_a, general_b):
 
 
 
-def mirror_scenario(general_a, general_b):
-    """
-    Deux armées strictement symétriques
-    """
+def mirror_scenario(unit_type , N, general_a, general_b):
+   
     player_a = Player("Army A", general_a)
-
+    player_a.color = "Blue"
     player_b = Player("Army B", general_b)
+    player_b.color = "Red"
 
-    world_map = Map(120 * TILE, 60 * TILE)
-
-    mid_y = world_map.get_height() / 2
-    spacing = int(2.5 * TILE)
-
+    world_map = Map(width = 120 * TILE, height = 120 * TILE,collision_allowance=0.5)
     all_units = []
 
-    for i in range(DEFAULT_SIZE):
-        y = mid_y + (i - DEFAULT_SIZE / 2) * spacing
+    SPACING = int(1.5 * TILE)
 
-        spawn_unit_safe(
-            UnitType.KNIGHT, 30 * TILE, y,
-            player_a, world_map, all_units
-        )
+    # Prototype pour récupérer la portée réelle
+    proto = create_unit(unit_type, 0, 0, player_a)
+    attack_range = proto.get_line_of_sight()
 
-        spawn_unit_safe(
-            UnitType.KNIGHT, 90 * TILE, y,
-            player_b, world_map, all_units
-        )
+    # Gap volontairement faible → combat immédiat
+    gap = attack_range * 0.8
+
+    mid_x = world_map.get_width() / 2
+    mid_y = world_map.get_height() / 2
+
+    rows_a = int(math.sqrt(N))
+    cols_a = math.ceil(N / rows_a)
+
+    width_a = (cols_a - 1) * SPACING
+    height_a = (rows_a - 1) * SPACING
+
+    start_x_a = (mid_x - gap / 2) - width_a
+    start_y_a = mid_y - height_a / 2
+
+    spawn_square(
+        player_a,
+        world_map,
+        all_units,
+        unit_type,
+        start_x_a,
+        start_y_a,
+        rows_a,
+        cols_a,
+        SPACING
+    )
+
+    Nb = N
+    rows_b = int(math.sqrt(Nb))
+    cols_b = math.ceil(Nb / rows_b)
+
+    width_b = (cols_b - 1) * SPACING
+    height_b = (rows_b - 1) * SPACING
+
+    start_x_b = (mid_x + gap / 2)
+    start_y_b = mid_y - height_b / 2
+
+    spawn_square(
+        player_b,
+        world_map,
+        all_units,
+        unit_type,
+        start_x_b,
+        start_y_b,
+        rows_b,
+        cols_b,
+        SPACING
+    )
 
     return [player_a, player_b], world_map
 
 
-def skirmish_scenario(general_a, general_b):
+def skirmish_scenario(unit_type, N, general_a, general_b):
     """
     Combat désorganisé : unités réparties aléatoirement
     """
@@ -215,17 +252,19 @@ def skirmish_scenario(general_a, general_b):
 
     all_units = []
 
-    for _ in range(DEFAULT_SIZE):
+    for _ in range(N):
+        # Army A (un peu plus à droite)
         spawn_unit_safe(
-            UnitType.KNIGHT,
-            random.uniform(10 * TILE, 50 * TILE),
+            unit_type,
+            random.uniform(40 * TILE, 55 * TILE),
             random.uniform(10 * TILE, 70 * TILE),
             player_a, world_map, all_units
         )
 
+        # Army B (un peu plus à gauche)
         spawn_unit_safe(
-            UnitType.KNIGHT,
-            random.uniform(70 * TILE, 110 * TILE),
+            unit_type,
+            random.uniform(65 * TILE, 80 * TILE),
             random.uniform(10 * TILE, 70 * TILE),
             player_b, world_map, all_units
         )
