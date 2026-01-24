@@ -68,19 +68,22 @@ def spawn_line(player, world_map, all_units,
 
 
 def spawn_square(player, world_map, all_units,
-                 unit_type, start_x, start_y,
-                 rows, cols, spacing):
-    """
-    Spawn une formation en carré
-    """
+                         unit_type, start_x, start_y,
+                         rows, cols, spacing, max_units):
+
+    spawned = 0
     for r in range(rows):
         for c in range(cols):
+            if spawned >= max_units:
+                return
             x = start_x + c * spacing
             y = start_y + r * spacing
             spawn_unit_safe(
                 unit_type, x, y,
                 player, world_map, all_units
             )
+            spawned += 1
+
 
 
 # ============================================================
@@ -139,7 +142,8 @@ def lanchester_scenario(unit_type, N, general_a, general_b):
         start_y_a,
         rows_a,
         cols_a,
-        SPACING
+        SPACING,
+        N
     )
 
     # ==========================
@@ -164,7 +168,8 @@ def lanchester_scenario(unit_type, N, general_a, general_b):
         start_y_b,
         rows_b,
         cols_b,
-        SPACING
+        SPACING,
+        Nb
     )
 
     return [player_a, player_b], world_map
@@ -246,7 +251,9 @@ def skirmish_scenario(unit_type, N, general_a, general_b):
     import random
 
     player_a = Player("Army A", general_a)
+    player_a.color = "Blue"
     player_b = Player("Army B", general_b)
+    player_b.color = "Red"
 
     world_map = Map(120 * TILE, 80 * TILE)
 

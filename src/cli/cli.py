@@ -281,6 +281,67 @@ def run_plot(args):
     plotter = get_plotter(args.plotter)
     plotter.plot(data)
 
+
+def run_load(args):
+    battle = Battle.load_state(args.savefile)
+    if not battle:
+        return
+
+    viewer = TerminalView() if args.terminal else IsometricView()
+    if viewer:
+        viewer.on_enter(battle, battle.get_state())
+    if isinstance(viewer, IsometricView):
+        pygame.display.set_mode((1800, 1000))
+    
+    running = True
+    print(f"🚀 Partie chargée : {battle.players[0].name} vs {battle.players[1].name}")
+    print("👉 Appuyez sur [TAB] pour le HUD Tactique.")
+
+    while not battle.finished and running:
+        battle.update()
+        game_state = battle.get_state()
+        
+        action = viewer.handle_input()
+
+        if action == "quit":
+            running = False
+
+        elif action == "switch_view":
+            viewer.on_exit()
+            viewer = IsometricView() if isinstance(viewer, TerminalView) else TerminalView()
+            viewer.on_enter(battle, game_state)
+            
+        # --- HTML 1 : HUD TACTIQUE (Touche TAB) ---
+        elif action == "\t": # Touche TAB renvoyée par la vue
+            print("\n⏸  PAUSE TACTIQUE")
+            time.sleep(0.3)
+            try:
+                generate_snapshot_html(battle.players, battle.time)
+            except Exception as e:
+                print(f"⚠️ Erreur HUD : {e}")
+            
+            # Boucle de pause
+            paused = True
+            while paused and running:
+                if isinstance(viewer, IsometricView):
+                    viewer.render(game_state)
+                    # Petit tick pour ne pas bloquer l'OS
+                    pygame.event.pump() 
+                
+                pause_act = viewer.handle_input()
+                if pause_act == "\t": paused = False
+                elif pause_act == "quit": running = False; paused = False
+                
+                if not isinstance(viewer, IsometricView):
+                    time.sleep(0.1)
+
+        viewer.render(game_state)
+        time.sleep(FRAME_DELAY)
+
+    print_battle_summary(battle)
+
+
+
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -291,6 +352,8 @@ def main(argv=None):
         run_plot(args)
     elif args.command == "tourney":
         tourney(args)
+    elif args.command == "load":
+        run_load(args)
 
 if __name__ == "cli_main":
     main()
