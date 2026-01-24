@@ -21,6 +21,8 @@ from src.vis.gui_view import IsometricView
 from src.fichiers.html_generator import generate_snapshot_html  # 1. HUD Tactique (TAB)
 from src.fichiers.data_exporter import save_battle_report            # 2. Export Données (-d)
 from src.fichiers.history import add_fight_history              # 3. Historique (Auto)
+from src.fichiers.tournament_report import generate_tournament_report
+
 
 
 
@@ -41,7 +43,6 @@ def build_parser():
     run.add_argument("ai_a", type=str)
     run.add_argument("ai_b", type=str)
     run.add_argument("-t", "--terminal", action="store_true")
-    
     # Argument pour l'export HTML (-d)
     run.add_argument("-d", "--data", type=str, default=None, help="Fichier de sortie des données")
 
@@ -53,6 +54,20 @@ def build_parser():
     plot.add_argument("unit_types", type=str)
     plot.add_argument("N_range", type=str)
     plot.add_argument("-N", "--repeats", type=int, default=10)
+
+    #load
+    load = sub.add_parser("load", help="Charger une bataille sauvegardÃ©e")
+    load.add_argument("savefile", type=str)
+    load.add_argument("-t", "--terminal", action="store_true")
+
+    #tourney
+    tourney = sub.add_parser("tourney", help="Lancer un tournoi automatique")
+    tourney.add_argument("-G", "--generals", nargs="+", required=True)
+    tourney.add_argument("-S", "--scenarios", nargs="+", required=True)
+    tourney.add_argument("-N", type=int, default=10)
+    tourney.add_argument("-na", action="store_true")
+    tourney.add_argument("-d", "--datafile", type=str, required=True)
+
 
     return parser
 
@@ -84,7 +99,7 @@ def run_battle(args):
     # C'est ICI que ça change pour éviter le bug Lanchester
     try:
         # Tentative 1 : Scénario complexe (ex: Lanchester) -> 4 arguments
-        players, world_map = scenario_fn(UnitType.KNIGHT, 5, general_a, general_b)
+        players, world_map = scenario_fn(UnitType.KNIGHT, 10, general_a, general_b)
     except TypeError:
         # Tentative 2 : Scénario simple (ex: map1, random) -> 2 arguments
         players, world_map = scenario_fn(general_a, general_b)
@@ -93,7 +108,7 @@ def run_battle(args):
     start_count_a = len(players[0].squad)
     start_count_b = len(players[1].squad)
 
-    battle = Battle(players=players, world_map=world_map, logic_dt=0.05, max_time=60)
+    battle = Battle(players=players, world_map=world_map, logic_dt=0.05, max_time=120)
 
     # --- Initialisation Vue ---
     viewer = TerminalView() if args.terminal else IsometricView()
@@ -201,8 +216,89 @@ def run_battle(args):
     except Exception as e:
         print(f"⚠️ Erreur Historique : {e}")
 
-# ============================================================
-# 4. PLOT & MAIN
+from itertools import product
+import json
+
+def tourney(args):
+    results = []
+    
+    # --- 1. Initialisation ---
+    stats = {}
+    for sc in args.scenarios:
+        stats[sc] = {}
+        for g1 in args.generals:
+            stats[sc][g1] = {}
+            for g2 in args.generals:
+                stats[sc][g1][g2] = {'wins': 0, 'matches': 0}
+
+    print(f"⚔️  Démarrage du tournoi : {len(args.generals)} Généraux sur {len(args.scenarios)} Scénarios")
+
+    # --- 2. Boucle du Tournoi ---
+    for scenario_name in args.scenarios:
+        scenario_fn = get_scenario(scenario_name)
+
+        for ai1, ai2 in product(args.generals, repeat=2):
+            for n in range(args.N):
+
+                # Gestion de l'inversion (Player 1 vs Player 2)
+                if not args.na and n % 2 == 1:
+                    a, b = ai2, ai1 
+                else:
+                    a, b = ai1, ai2
+
+                general_a = get_general(a)
+                general_b = get_general(b)
+
+                # players[0] est piloté par 'a', players[1] par 'b'
+                players, world_map = scenario_fn(UnitType.KNIGHT, 5, general_a, general_b)
+                battle = Battle(players, world_map)
+
+                battle_result = battle.run()
+
+                # --- 3. DÉTECTION ROBUSTE DU VAINQUEUR ---
+                # On regarde quel OBJET Player a gagné, pas son nom.
+                actual_winner_ai_name = None
+                
+                if battle.winner == players[0]:
+                    actual_winner_ai_name = a  # C'est l'IA 'a' qui a gagné
+                elif battle.winner == players[1]:
+                    actual_winner_ai_name = b  # C'est l'IA 'b' qui a gagné
+                
+                # Enregistrement brut (JSON)
+                result = {
+                    "scenario": scenario_name,
+                    "ai_a": a,
+                    "ai_b": b,
+                    "round": n,
+                    "winner": actual_winner_ai_name, # On stocke le nom de l'IA, pas "Player 1"
+                    "turns": battle_result.turns,
+                    "duration": battle_result.duration,
+                    "remaining_units": battle_result.remaining_units,
+                }
+                results.append(result)
+
+                # --- 4. Aggregation pour le HTML ---
+                # Ici ai1 est la "ligne" du tableau, ai2 la "colonne"
+                stats[scenario_name][ai1][ai2]['matches'] += 1
+                
+                if actual_winner_ai_name == ai1:
+                    stats[scenario_name][ai1][ai2]['wins'] += 1
+                
+                print(".", end="", flush=True)
+
+    print("\n✅ Tournoi terminé.")
+
+    # --- 5. Export JSON ---
+    with open(args.datafile, "w") as f:
+        for r in results:
+            f.write(json.dumps(r) + "\n")
+
+    # --- 6. Génération HTML ---
+    try:
+        generate_tournament_report(stats, args.generals, args.scenarios)
+    except Exception as e:
+        print(f"❌ Erreur HTML : {e}")
+
 # ============================================================
 def run_plot(args):
     from src.core.scenario import run_lanchester_experiment
@@ -229,6 +325,8 @@ def main(argv=None):
         run_battle(args)
     elif args.command == "plot":
         run_plot(args)
+    elif args.command == "tourney":
+        tourney(args)
 
 if __name__ == "cli_main":
     main()
