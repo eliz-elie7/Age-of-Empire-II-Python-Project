@@ -1,6 +1,6 @@
 import random
 from .General import General
-from ..core.units import Crossbowman, Knight, Pikeman
+from ..core.units import Crossbowman, Knight, Pikeman, LongSwordsman, EliteSkirmisher
 
 class SunTzu(General):
     """
