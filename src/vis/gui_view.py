@@ -1,7 +1,8 @@
 import os
 import pygame
 import sys
-from typing import Tuple
+import math
+from typing import Tuple, Dict
 from src.vis.view_base import View
 
 TILE = 32.0
@@ -71,6 +72,7 @@ class IsometricView(View):
             self.bg = pygame.transform.scale(self.bg, (self.width, self.height))
 
     def load_sprites(self):
+        """Charge les sprites en les classant par Type > Couleur > Direction."""
         self.sprites.clear()
         self.scaled_cache.clear()
         if not os.path.isdir(SPRITES_ROOT): return
@@ -90,27 +92,45 @@ class IsometricView(View):
                 for fname in os.listdir(cpath):
                     if not fname.lower().endswith(".png"): continue
                     surf = pygame.image.load(os.path.join(cpath, fname)).convert_alpha()
-                    # Scale initial pour que le sprite ne dépasse pas une TILE logicielle
+                    
+                    # --- AGRANDISSEMENT : base_scale à 2.2 au lieu de 1.5 ---
                     ow, oh = surf.get_size()
-                    base_scale = (TILE * 1.5) / max(ow, oh)
+                    base_scale = (TILE * 2.2) / max(ow, oh)
                     surf = pygame.transform.smoothscale(surf, (int(ow * base_scale), int(oh * base_scale)))
-                    self.sprites[u_key][c_key][os.path.splitext(fname)[0].lower()] = surf
+                    
+                    # On utilise le nom du fichier (sans extension) comme clé de direction
+                    direction_name = os.path.splitext(fname)[0].lower()
+                    self.sprites[u_key][c_key][direction_name] = surf
         self.loaded = True
 
-    def get_scaled_sprite(self, unit_type, color):
+    def get_direction_str(self, vx: float, vy: float) -> str:
+        """Détermine la direction cardinale à partir d'un vecteur."""
+        if abs(vx) < 0.01 and abs(vy) < 0.01:
+            return "down"
+        # Calcul de l'angle en degrés
+        angle = math.degrees(math.atan2(vy, vx))
+        # Ajustement pour la perspective isométrique (offset de 45°)
+        if -45 <= angle <= 45: return "right"
+        if 45 < angle <= 135: return "down"
+        if -135 <= angle < -45: return "up"
+        return "left"
+
+    def get_scaled_sprite(self, unit_type, color, direction="down"):
+        """Récupère le sprite orienté et mis à l'échelle."""
         ut = self.sprites.get(unit_type)
         if not ut: return None
         cl = ut.get(color)
         if not cl: return None
         
-        base_surf = next(iter(cl.values()))
+        # On cherche la direction spécifiée, sinon "down", sinon la première disponible
+        base_surf = cl.get(direction) or cl.get("down") or next(iter(cl.values()))
+        
         if abs(self.zoom - self.last_zoom) > 0.01:
             self.scaled_cache.clear()
             self.last_zoom = self.zoom
             
-        cache_key = f"{unit_type}_{color}"
+        cache_key = f"{unit_type}_{color}_{direction}"
         if cache_key not in self.scaled_cache:
-            # Facteur 5 pour compenser le petit zoom par défaut (0.2)
             s_fact = self.zoom * 5.0
             nw = max(1, int(base_surf.get_width() * s_fact))
             nh = max(1, int(base_surf.get_height() * s_fact))
@@ -122,29 +142,33 @@ class IsometricView(View):
             if event.type == pygame.QUIT:
                 self.exit_game()
                 return "quit"
-            if event.type == pygame.K_TAB:
-                return "\t"
 
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_ESCAPE, pygame.K_q):
                     self.exit_game()
                     return "quit"
 
-                # UI Modes
                 if event.key == pygame.K_F1: self.ui_mode = 0
                 if event.key == pygame.K_F2: self.ui_mode = 1
                 if event.key == pygame.K_F3: self.ui_mode = 2
                 if event.key == pygame.K_F4: self.ui_mode = 3
                
-                # Pour le save / load 
-                if event.key == pygame.K_TAB : return "\t"
-                if event.key == pygame.K_F11 : return "save"
-                if  event.key == pygame.K_F12 : return "load"
+                if event.key == pygame.K_TAB: return "\t"
+                if event.key == pygame.K_F11: return "save"
+                if event.key == pygame.K_F12: return "load"
+
+                if event.key == pygame.K_n:
+                    self.zoom = min(self.zoom * 1.2, self.max_zoom)
+                if event.key == pygame.K_z:
+                    self.zoom = max(self.zoom / 1.2, self.min_zoom)
+
+                if event.key == pygame.K_p: return "pause"
+                if event.key == pygame.K_k: return "accelerer"
+                if event.key == pygame.K_r: return "normal"
             
                 if event.key == pygame.K_F9: return "switch_view"
                 if event.key == pygame.K_c: self.center_on_units()
                 if event.key == pygame.K_f: self.auto_follow = not self.auto_follow
-                if event.key == pygame.K_z: self.zoom = 1.0
 
                 cam_speed = 15 / max(self.zoom, 0.1)
                 if event.key in (pygame.K_LEFT, pygame.K_a): self.camera_x -= cam_speed; self.auto_follow = False
@@ -172,9 +196,7 @@ class IsometricView(View):
         return None
 
     def exit_game(self):
-        """Ferme proprement pygame et le script."""
         pygame.quit()
-        #sys.exit()
 
     def draw_unit_counters(self, game_state):
         if self.ui_mode not in (1, 3): return
@@ -215,6 +237,7 @@ class IsometricView(View):
             self.auto_follow = False
 
     def render(self, game_state):
+        # Auto-follow
         if self.auto_follow and getattr(self, "battle", None):
             gs = self.battle.get_state()
             all_u = [u for p in gs.get("players", []) for u in p.get("units", [])]
@@ -223,6 +246,7 @@ class IsometricView(View):
                 self.camera_x += (tx - self.camera_x) * self.follow_smooth
                 self.camera_y += (ty - self.camera_y) * self.follow_smooth
 
+        # Dessin Background
         if self.bg:
             cx, cy = iso_project(self.camera_x, self.camera_y)
             ox, oy = int(cx * self.zoom) % self.bg.get_width(), int(cy * self.zoom) % self.bg.get_height()
@@ -238,20 +262,41 @@ class IsometricView(View):
         for p in game_state.get("players", []):
             color = p.get("color", "blue").lower()
             for u in p.get("units", []):
-                surf = self.get_scaled_sprite(symbol_to_type(u.get("symbol")), color)
+                # DETERMINATION DE LA DIRECTION POUR LE SPRITE
+                # Si l'unité a une cible, elle regarde vers elle, sinon vers son mouvement
+                order = u.get("order_type")
+                look_vx, look_vy = 0, 0
+                
+                # Récupération de la direction depuis l'objet réel si possible
+                # (Assumes l'unité stocke sa 'direction' calculée dans Unit.update)
+                direction = u.get("direction", "down")
+                
+                surf = self.get_scaled_sprite(symbol_to_type(u.get("symbol")), color, direction)
                 if surf:
                     sx, sy = self.world_to_screen(u["x"], u["y"])
-                    render_list.append((sy, surf, sx, sy))
+                    el = self.battle.world_map.get_elevation_at(u["x"], u["y"])
+                    render_list.append((sy, surf, sx, sy, el))
 
+        # Tri par profondeur (Z-ordering)
         render_list.sort(key=lambda e: e[0])
-        v_s = self.zoom * 5.0 # Facteur visuel cohérent
+        v_s = self.zoom * 5.0 
 
-        for _, surf, sx, sy in render_list:
-            ax, ay = surf.get_width() // 2, surf.get_height() - int(2 * v_s)
-            sh_w, sh_h = TILE * 0.7 * v_s, TILE * 0.3 * v_s
+        for _, surf, sx, sy, el in render_list:
+            # Ancrage : centre horizontal, bas du sprite
+            ax, ay = surf.get_width() // 2, int(surf.get_height() * 0.85)
+            
+            # 1. SOL (Indicateur sobre d'élévation)
+            if el > 0:
+                terrain_color = (60, 80, 60) if el == 1 else (90, 110, 90)
+                pygame.draw.circle(self.screen, terrain_color, (sx, sy), int(TILE * 0.6 * self.zoom))
+
+            # 2. OMBRE
+            sh_w, sh_h = TILE * 0.8 * v_s, TILE * 0.4 * v_s
             shadow = pygame.Surface((int(sh_w), int(sh_h)), pygame.SRCALPHA)
-            pygame.draw.ellipse(shadow, (0, 0, 0, 60), shadow.get_rect())
+            pygame.draw.ellipse(shadow, (0, 0, 0, 70), shadow.get_rect())
             self.screen.blit(shadow, (sx - sh_w // 2, sy - sh_h // 2))
+            
+            # 3. UNITÉ
             self.screen.blit(surf, (sx - ax, sy - ay))
 
         self.draw_unit_counters(game_state)
@@ -262,7 +307,10 @@ class IsometricView(View):
     def world_to_screen(self, wx, wy):
         tx, ty = wx - self.camera_x, wy - self.camera_y
         sx, sy = iso_project(tx, ty)
-        return round(sx * self.zoom + self.width/2), round(sy * self.zoom + self.height/2)
+        elevation = self.battle.world_map.get_elevation_at(wx, wy)
+        # Décalage vertical sobre par niveau
+        height_offset = elevation * 15.0 * self.zoom
+        return round(sx * self.zoom + self.width/2), round((sy * self.zoom) - height_offset + self.height/2)
 
     def center_on_units(self, initial_game_state=None):
         gs = initial_game_state if initial_game_state else getattr(self.battle, "get_state", lambda: None)()
@@ -281,4 +329,4 @@ class IsometricView(View):
     def on_exit(self): 
         self.sprites.clear()
         self.scaled_cache.clear()
-        self.exit_game()
+        pygame.quit()

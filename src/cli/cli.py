@@ -21,6 +21,7 @@ from src.vis.gui_view import IsometricView
 from src.fichiers.html_generator import generate_snapshot_html  # 1. HUD Tactique (TAB)
 from src.fichiers.data_exporter import save_battle_report            # 2. Export Données (-d)
 from src.fichiers.history import add_fight_history              # 3. Historique (Auto)
+from src.fichiers.tournament_report import generate_tournament_report # Tournoi HTML
 
 
 
@@ -88,113 +89,107 @@ def print_battle_summary(battle: Battle):
 # 3. EXÉCUTION (RUN)
 # ============================================================
 def run_battle(args):
-    # --- Chargement ---
+    # --- 1. Préparation du Scénario et des IA ---
     scenario_fn = get_scenario(args.scenario)
-    general_a = get_general(args.ai_a) # Pas de parenthèses !
-    general_b = get_general(args.ai_b) # Pas de parenthèses !
+    general_a = get_general(args.ai_a)
+    general_b = get_general(args.ai_b)
 
-    # --- Création de la bataille (VERSION ROBUSTE) ---
-    # C'est ICI que ça change pour éviter le bug Lanchester
     try:
-        # Tentative 1 : Scénario complexe (ex: Lanchester) -> 4 arguments
-        players, world_map = scenario_fn(UnitType.KNIGHT, 10, general_a, general_b)
+        # Tentative scénario complexe
+        players, world_map = scenario_fn(UnitType.KNIGHT, 10 , general_a, general_b)
     except TypeError:
-        # Tentative 2 : Scénario simple (ex: map1, random) -> 2 arguments
+        # Tentative scénario simple
         players, world_map = scenario_fn(general_a, general_b)
     
-    # IMPORTANT : On compte les unités au début pour l'historique
     start_count_a = len(players[0].squad)
     start_count_b = len(players[1].squad)
 
+    # Création de l'objet Battle
     battle = Battle(players=players, world_map=world_map, logic_dt=0.05, max_time=120)
 
-    # --- Initialisation Vue ---
+    # --- 2. Initialisation de la Vue ---
     viewer = TerminalView() if args.terminal else IsometricView()
     if viewer:
         viewer.on_enter(battle, battle.get_state())
-    if isinstance(viewer, IsometricView):
-        pygame.display.set_mode((1800, 1000))
     
+    # --- 3. État du Contrôleur (Flags) ---
     running = True
+    is_paused = False
+    current_speed = 1  # Vitesse de simulation initiale
+    
     print(f"🚀 Démarrage : {players[0].name} vs {players[1].name}")
-    print("👉 Appuyez sur [TAB] pour le HUD Tactique.")
+    print("👉 COMMANDES : [TAB] Snapshot HTML | [P] Pause | [K] Accélérer | [R] Reset Vitesse | [F11/F12] Save/Load")
 
-    # --- BOUCLE PRINCIPALE ---
+    # --- 4. BOUCLE PRINCIPALE ---
     while not battle.finished and running:
-        battle.update()
-        game_state = battle.get_state()
         
-        # Gestion des Inputs
+        # A) Gestion des Inputs
         action = viewer.handle_input()
 
         if action == "quit":
             running = False
 
+        elif action == "pause":
+            is_paused = not is_paused
+            state_str = "⏸ PAUSE" if is_paused else "▶ REPRISE"
+            print(state_str)
+
+        elif action == "accelerer":
+            current_speed = 5
+            print(f"⏩ VITESSE ACCÉLÉRÉE (x{current_speed})")
+
+        elif action == "normal": # Touche R renvoyée par la vue
+            current_speed = 1
+            print("▶ VITESSE NORMALE (x1)")
+
         elif action == "switch_view":
             viewer.on_exit()
             viewer = IsometricView() if isinstance(viewer, TerminalView) else TerminalView()
-            viewer.on_enter(battle, game_state)
-            
-        # --- HTML 1 : HUD TACTIQUE (Touche TAB) ---
-        elif action == "\t": # Touche TAB renvoyée par la vue
-            print("\n⏸  PAUSE TACTIQUE")
-            time.sleep(0.3)
+            viewer.on_enter(battle, battle.get_state())
+
+        elif action == "\t": 
+            print("📸 Génération du snapshot HTML (Le combat continue...)")
             try:
                 generate_snapshot_html(battle.players, battle.time)
             except Exception as e:
                 print(f"⚠️ Erreur HUD : {e}")
-            
-            # Boucle de pause
-            paused = True
-            while paused and running:
-                if isinstance(viewer, IsometricView):
-                    viewer.render(game_state)
-                    # Petit tick pour ne pas bloquer l'OS
-                    pygame.event.pump() 
-                
-                pause_act = viewer.handle_input()
-                if pause_act == "\t": paused = False
-                elif pause_act == "quit": running = False; paused = False
-                
-                if not isinstance(viewer, IsometricView):
-                    time.sleep(0.1)
-        # --- GESTION SAUVEGARDE (F11) ---
+
         elif action == "save":
-            battle.save_state()  # Appelle la méthode qu'on a créée dans Battle
-            time.sleep(0.2)      # Petit délai pour éviter de sauvegarder 10 fois par seconde
+            battle.save_state()
 
-        # --- GESTION CHARGEMENT (F12) ---
         elif action == "load":
-            loaded_battle = Battle.load_state() # Charge le fichier
-            
+            loaded_battle = Battle.load_state()
             if loaded_battle:
-                # REMPLACEMENT CRITIQUE : L'ancienne bataille est écrasée par la nouvelle
                 battle = loaded_battle 
-                
-                # IMPORTANT : On dit à la vue de se mettre à jour avec la nouvelle bataille
-                if viewer:
-                    viewer.on_enter(battle, battle.get_state())
-                
-                time.sleep(0.2)
+                viewer.on_enter(battle, battle.get_state())
+                print("📂 Partie chargée !")
 
+        # B) Mise à jour de la Simulation
+        if not is_paused:
+            # Appel de la méthode update avec le paramètre speed (boucle interne de Battle)
+            game_state = battle.update(speed=current_speed)
+        else:
+            # En pause, on récupère l'état statique pour l'affichage
+            game_state = battle.get_state()
 
-        # Rendu normal
-        viewer.render(game_state)
+        # C) Rendu Visuel
+        if game_state:
+            viewer.render(game_state)
+        
+        # D) Limitation de la boucle d'affichage
         time.sleep(FRAME_DELAY)
 
-    # --- FIN DU COMBAT ---
+    # --- 5. FIN DU COMBAT ET EXPORTS ---
     print_battle_summary(battle)
 
-    # --- HTML 2 : EXPORT DONNÉES (-d) ---
     if args.data:
         save_battle_report(args.data, battle, args)
 
-    # --- HTML 3 : HISTORIQUE AUTOMATIQUE ---
     winner_name = battle.winner.name if battle.winner else "DRAW"
     survivors_data = []
     for p in battle.players:
         for u in p.squad:
-            if u.is_alive:
+            if u.current_hp > 0:
                 sym = u.get_symbol() if hasattr(u, "get_symbol") else "U"
                 survivors_data.append((sym, p.name))
     
@@ -219,49 +214,83 @@ import json
 
 def tourney(args):
     results = []
+    
+    # --- 1. Initialisation ---
+    stats = {}
+    for sc in args.scenarios:
+        stats[sc] = {}
+        for g1 in args.generals:
+            stats[sc][g1] = {}
+            for g2 in args.generals:
+                stats[sc][g1][g2] = {'wins': 0, 'matches': 0}
 
+    print(f"⚔️  Démarrage du tournoi : {len(args.generals)} Généraux sur {len(args.scenarios)} Scénarios")
+
+    # --- 2. Boucle du Tournoi ---
     for scenario_name in args.scenarios:
         scenario_fn = get_scenario(scenario_name)
 
-        # ✅ inclut X vs X
         for ai1, ai2 in product(args.generals, repeat=2):
             for n in range(args.N):
 
-                # ✅ alternance des positions
+                # Gestion de l'inversion (Player 1 vs Player 2)
                 if not args.na and n % 2 == 1:
-                    a, b = ai2, ai1
+                    a, b = ai2, ai1 
                 else:
                     a, b = ai1, ai2
 
                 general_a = get_general(a)
                 general_b = get_general(b)
 
-                players, world_map = scenario_fn(UnitType.KNIGHT, 5,general_a, general_b)
+                # players[0] est piloté par 'a', players[1] par 'b'
+                players, world_map = scenario_fn(UnitType.KNIGHT, 5, general_a, general_b)
                 battle = Battle(players, world_map)
 
-                # ✅ récupération correcte du résultat
                 battle_result = battle.run()
 
+                # --- 3. DÉTECTION ROBUSTE DU VAINQUEUR ---
+                # On regarde quel OBJET Player a gagné, pas son nom.
+                actual_winner_ai_name = None
+                
+                if battle.winner == players[0]:
+                    actual_winner_ai_name = a  # C'est l'IA 'a' qui a gagné
+                elif battle.winner == players[1]:
+                    actual_winner_ai_name = b  # C'est l'IA 'b' qui a gagné
+                
+                # Enregistrement brut (JSON)
                 result = {
                     "scenario": scenario_name,
                     "ai_a": a,
                     "ai_b": b,
                     "round": n,
-                    "winner": battle_result.winner,
+                    "winner": actual_winner_ai_name, # On stocke le nom de l'IA, pas "Player 1"
                     "turns": battle_result.turns,
                     "duration": battle_result.duration,
                     "remaining_units": battle_result.remaining_units,
                 }
-
                 results.append(result)
 
-    # (temporaire) écriture brute — remplacée plus tard par HTML
+                # --- 4. Aggregation pour le HTML ---
+                # Ici ai1 est la "ligne" du tableau, ai2 la "colonne"
+                stats[scenario_name][ai1][ai2]['matches'] += 1
+                
+                if actual_winner_ai_name == ai1:
+                    stats[scenario_name][ai1][ai2]['wins'] += 1
+                
+                print(".", end="", flush=True)
+
+    print("\n✅ Tournoi terminé.")
+
+    # --- 5. Export JSON ---
     with open(args.datafile, "w") as f:
         for r in results:
             f.write(json.dumps(r) + "\n")
 
-    print(f"Tournoi terminé — {len(results)} matchs exécutés")
-
+    # --- 6. Génération HTML ---
+    try:
+        generate_tournament_report(stats, args.generals, args.scenarios)
+    except Exception as e:
+        print(f"❌ Erreur HTML : {e}")
 
 # ============================================================
 def run_plot(args):
