@@ -1,8 +1,6 @@
 import random
 from .General import General
-# Ajuste l'import selon la structure de tes dossiers. 
-# Si ce fichier est dans src/ai/, et units dans src/core/ :
-from ..core.units import Knight, Pikeman, Crossbowman
+from ..core.units import Crossbowman, Knight, Pikeman
 
 class SunTzu(General):
     """
