@@ -159,15 +159,26 @@ class Unit:
     def _apply_combat_damage(self):
         target = self._order_data.get("target")
         if target and target.is_alive:
-            # On applique les dégâts
-            dmg = max(1, self.get_attack() - target.get_melee_armor())
-            dtype = "pierce" if self.get_symbol() == "C" else "melee"
-            target.take_damage(dmg, dtype)
+            # Calcul des dégâts de base
+            base_dmg = max(1, self.get_attack() - target.get_melee_armor())
             
-            # --- CRITIQUE : Reset du cooldown pour le prochain coup ---
+            # --- LOGIQUE DE HAUTEUR ---
+            # 'battle' doit être accessible ou passé en argument, 
+            # sinon on utilise self.battle si tu l'as stocké à l'init
+            my_el = self.battle.world_map.get_elevation_at(self.x, self.y)
+            target_el = self.battle.world_map.get_elevation_at(target.x, target.y)
+            
+            final_dmg = base_dmg
+            if my_el > target_el:
+                final_dmg = int(base_dmg * 1.3) # +30% de bonus
+            elif my_el < target_el:
+                final_dmg = int(base_dmg * 0.8) # -20% de malus
+
+            dtype = "pierce" if self.get_symbol() == "C" else "melee"
+            target.take_damage(final_dmg, dtype)
+            
             self.attack_cooldown = self.get_reload_time()
             
-            # Si la cible meurt sur ce coup, on libère l'unité
             if not target.is_alive:
                 self.clear_order()
 
@@ -182,7 +193,6 @@ class Unit:
             target = self._order_data.get("target")
             if target and target.is_alive:
                 dist = self.distance_to(target)
-                # Portée visuelle / collision
                 eff_range = (self.get_range() + self.get_collision_radius() + target.get_collision_radius()) - 2.0
                 if dist > eff_range:
                     target_pos = (target.x, target.y)
@@ -191,26 +201,33 @@ class Unit:
             dx = target_pos[0] - self.x
             dy = target_pos[1] - self.y
             dist = math.sqrt(dx*dx + dy*dy)
+            
             if dist > 0.1:
-                # On normalise et on multiplie par la vitesse réelle de l'unité
-                vx = (dx / dist) * self.get_speed()
-                vy = (dy / dist) * self.get_speed()
+                # --- LOGIQUE D'ÉLÉVATION ---
+                current_el = battle.world_map.get_elevation_at(self.x, self.y)
+                target_el = battle.world_map.get_elevation_at(target_pos[0], target_pos[1])
+                
+                speed_mod = 1.0
+                if target_el > current_el:
+                    speed_mod = 0.6  # Ralentissement en montée (-40%)
+                elif target_el < current_el:
+                    speed_mod = 1.2  # Bonus en descente (+20%)
 
-        # --- B. SÉPARATION ---
+                vx = (dx / dist) * self.get_speed() * speed_mod
+                vy = (dy / dist) * self.get_speed() * speed_mod
+
+        # --- B. SÉPARATION (Inchangée mais essentielle) ---
         all_units = battle.all_units()
         sep_x, sep_y = 0.0, 0.0
         for other in all_units:
             if other is self or not other.is_alive: continue
-            
-            dx = self.x - other.x
-            dy = self.y - other.y
+            dx, dy = self.x - other.x, self.y - other.y
             dist_sq = dx*dx + dy*dy
             min_dist = (self.get_collision_radius() + other.get_collision_radius()) * 0.9
             
             if dist_sq < min_dist * min_dist and dist_sq > 0:
                 d = math.sqrt(dist_sq)
                 push = (min_dist - d) / min_dist
-                # La force de séparation doit être proportionnelle à la vitesse
                 sep_x += (dx / d) * push * self.get_speed() * 1.5
                 sep_y += (dy / d) * push * self.get_speed() * 1.5
 
@@ -218,46 +235,59 @@ class Unit:
 
     def update(self, battle, delta_time: float):
         if not self.is_alive: return
+        
+        # On garde une référence à battle pour le calcul des dégâts
+        self.battle = battle 
 
         self.attack_cooldown = max(0.0, self.attack_cooldown - delta_time)
 
-        # 1. SI EN WINDUP : On termine l'action
+        # 1. SI EN WINDUP
         if self.attack_windup_timer > 0:
             self.attack_windup_timer -= delta_time
             if self.attack_windup_timer <= 0:
                 self._apply_combat_damage()
             return
 
-        # 2. VÉRIFICATION DE LA CIBLE (Anti-deadlock)
+        # 2. VÉRIFICATION DE LA CIBLE
         if self._current_order == "attack":
             target = self._order_data.get("target")
-            
-            # Si la cible est morte ou a disparu, on repasse en idle pour chercher quelqu'un d'autre
             if not target or not target.is_alive:
                 self.clear_order()
                 return
 
             dist = self.distance_to(target)
-            # On ajoute une marge de tolérance de 5 pixels pour l'engagement
-            eff_range = (self.get_range() + self.get_collision_radius() + target.get_collision_radius()) + 5.0
+            
+            # BONUS DE PORTÉE : Les unités en hauteur voient plus loin / tirent plus loin
+            my_el = battle.world_map.get_elevation_at(self.x, self.y)
+            range_bonus = 15.0 if my_el > 0 else 0.0 # +15 pixels de portée sur une colline
+            
+            eff_range = (self.get_range() + range_bonus + self.get_collision_radius() + target.get_collision_radius()) + 5.0
             
             if dist <= eff_range:
                 if self.attack_cooldown <= 0:
                     self.attack_windup_timer = self.get_attack_windup()
-                    return # On lance l'attaque
+                    return 
                 else:
-                    # On est à portée mais on recharge : on ne bouge pas, on attend.
                     return 
 
-        # 3. MOUVEMENT (Si pas en train d'attaquer ou si trop loin)
+        # 3. MOUVEMENT (can_move_to contient maintenant le test de falaise)
         vx, vy = self._compute_steering(battle)
 
         if vx != 0 or vy != 0:
             nx = self.x + vx * delta_time
             ny = self.y + vy * delta_time
             all_units = battle.all_units()
+            
+            # Ici can_move_to va renvoyer False si la pente est > 1
             if battle.world_map.can_move_to(self, nx, ny, all_units):
                 self.x, self.y = battle.world_map.clamp_position(nx, ny)
+            if not battle.world_map.can_move_to(self, nx, ny, all_units):
+                # Si on ne peut pas monter, on essaie de bouger uniquement sur l'axe X ou Y 
+                # pour longer la colline au lieu de s'arrêter net.
+                if battle.world_map.can_move_to(self, nx, self.y, all_units):
+                    self.x = nx
+                elif battle.world_map.can_move_to(self, self.x, ny, all_units):
+                    self.y = ny
     # ===== ORDRES =====
 
     def _execute_move_order(self, delta_time: float, battle):
@@ -346,7 +376,7 @@ class Knight(Unit):
     def get_speed(self): return 1.35 * TILE 
     def get_line_of_sight(self): return 4.0 * TILE 
     def get_symbol(self): return "K" 
-    def get_collision_radius(self): return 0.25 * TILE  # 0.5
+    def get_collision_radius(self): return 0.20 * TILE  # 0.5
     def get_attack_windup(self): return 0.15
 
 class Pikeman(Unit):
@@ -359,7 +389,7 @@ class Pikeman(Unit):
     def get_speed(self): return 1.0 * TILE
     def get_line_of_sight(self): return 4.0 * TILE
     def get_symbol(self): return "P"
-    def get_collision_radius(self): return 0.20 * TILE  # 0.45
+    def get_collision_radius(self): return 0.15 * TILE  # 0.45
     def get_attack_windup(self): return 0.20
 
 class Crossbowman(Unit):
@@ -372,7 +402,7 @@ class Crossbowman(Unit):
     def get_speed(self): return 0.96 * TILE
     def get_line_of_sight(self): return 7.0 * TILE
     def get_symbol(self): return "C"
-    def get_collision_radius(self): return 0.20 * TILE  # 0.45
+    def get_collision_radius(self): return 0.15 * TILE  # 0.45
     def get_attack_windup(self): return 0.30
 
 # ===== FACTORY =====
