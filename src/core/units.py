@@ -97,8 +97,8 @@ class Unit:
         return self.current_hp > 0
     # ===== UPDATE PRINCIPALE =====
 
-    def _apply_soft_separation(self, battle, delta_time: float):
-        """Remplace le jitter brutal par une répulsion douce entre unités."""
+    """def _apply_soft_separation(self, battle, delta_time: float):
+        #Remplace le jitter brutal par une répulsion douce entre unités.
         all_units = battle.all_units()
         push_force_x = 0
         push_force_y = 0
@@ -154,8 +154,110 @@ class Unit:
         if self._current_order == "move":
             self._execute_move_order(delta_time, battle)
         elif self._current_order == "attack":
-            self._execute_attack_order(delta_time, battle)
+            self._execute_attack_order(delta_time, battle)"""
 
+    def _apply_combat_damage(self):
+        target = self._order_data.get("target")
+        if target and target.is_alive:
+            # On applique les dégâts
+            dmg = max(1, self.get_attack() - target.get_melee_armor())
+            dtype = "pierce" if self.get_symbol() == "C" else "melee"
+            target.take_damage(dmg, dtype)
+            
+            # --- CRITIQUE : Reset du cooldown pour le prochain coup ---
+            self.attack_cooldown = self.get_reload_time()
+            
+            # Si la cible meurt sur ce coup, on libère l'unité
+            if not target.is_alive:
+                self.clear_order()
+
+    def _compute_steering(self, battle) -> Tuple[float, float]:
+        vx, vy = 0.0, 0.0
+        target_pos = None
+
+        # --- A. DIRECTION ---
+        if self._current_order == "move":
+            target_pos = self._order_data.get("position")
+        elif self._current_order == "attack":
+            target = self._order_data.get("target")
+            if target and target.is_alive:
+                dist = self.distance_to(target)
+                # Portée visuelle / collision
+                eff_range = (self.get_range() + self.get_collision_radius() + target.get_collision_radius()) - 2.0
+                if dist > eff_range:
+                    target_pos = (target.x, target.y)
+
+        if target_pos:
+            dx = target_pos[0] - self.x
+            dy = target_pos[1] - self.y
+            dist = math.sqrt(dx*dx + dy*dy)
+            if dist > 0.1:
+                # On normalise et on multiplie par la vitesse réelle de l'unité
+                vx = (dx / dist) * self.get_speed()
+                vy = (dy / dist) * self.get_speed()
+
+        # --- B. SÉPARATION ---
+        all_units = battle.all_units()
+        sep_x, sep_y = 0.0, 0.0
+        for other in all_units:
+            if other is self or not other.is_alive: continue
+            
+            dx = self.x - other.x
+            dy = self.y - other.y
+            dist_sq = dx*dx + dy*dy
+            min_dist = (self.get_collision_radius() + other.get_collision_radius()) * 0.9
+            
+            if dist_sq < min_dist * min_dist and dist_sq > 0:
+                d = math.sqrt(dist_sq)
+                push = (min_dist - d) / min_dist
+                # La force de séparation doit être proportionnelle à la vitesse
+                sep_x += (dx / d) * push * self.get_speed() * 1.5
+                sep_y += (dy / d) * push * self.get_speed() * 1.5
+
+        return vx + sep_x, vy + sep_y
+
+    def update(self, battle, delta_time: float):
+        if not self.is_alive: return
+
+        self.attack_cooldown = max(0.0, self.attack_cooldown - delta_time)
+
+        # 1. SI EN WINDUP : On termine l'action
+        if self.attack_windup_timer > 0:
+            self.attack_windup_timer -= delta_time
+            if self.attack_windup_timer <= 0:
+                self._apply_combat_damage()
+            return
+
+        # 2. VÉRIFICATION DE LA CIBLE (Anti-deadlock)
+        if self._current_order == "attack":
+            target = self._order_data.get("target")
+            
+            # Si la cible est morte ou a disparu, on repasse en idle pour chercher quelqu'un d'autre
+            if not target or not target.is_alive:
+                self.clear_order()
+                return
+
+            dist = self.distance_to(target)
+            # On ajoute une marge de tolérance de 5 pixels pour l'engagement
+            eff_range = (self.get_range() + self.get_collision_radius() + target.get_collision_radius()) + 5.0
+            
+            if dist <= eff_range:
+                if self.attack_cooldown <= 0:
+                    self.attack_windup_timer = self.get_attack_windup()
+                    return # On lance l'attaque
+                else:
+                    # On est à portée mais on recharge : on ne bouge pas, on attend.
+                    return 
+
+        # 3. MOUVEMENT (Si pas en train d'attaquer ou si trop loin)
+        vx, vy = self._compute_steering(battle)
+
+        if vx != 0 or vy != 0:
+            nx = self.x + vx * delta_time
+            ny = self.y + vy * delta_time
+            all_units = battle.all_units()
+            if battle.world_map.can_move_to(self, nx, ny, all_units):
+                self.x, self.y = battle.world_map.clamp_position(nx, ny)
     # ===== ORDRES =====
 
     def _execute_move_order(self, delta_time: float, battle):
@@ -179,7 +281,7 @@ class Unit:
         
         # FORMULE : Portée de la stat + Rayon de l'attaquant + Rayon de la cible
         # On ajoute 2 pixels de marge pour la précision des flottants
-        visual_overlap = 5.0 # pour gerer le chevauchement visuel
+        visual_overlap = 15.0 # pour gerer le chevauchement visuel
         effective_range = (self.get_range() + 
                   self.get_collision_radius() + 
                   target.get_collision_radius()) - visual_overlap
@@ -244,7 +346,7 @@ class Knight(Unit):
     def get_speed(self): return 1.35 * TILE 
     def get_line_of_sight(self): return 4.0 * TILE 
     def get_symbol(self): return "K" 
-    def get_collision_radius(self): return 0.5 * TILE 
+    def get_collision_radius(self): return 0.25 * TILE  # 0.5
     def get_attack_windup(self): return 0.15
 
 class Pikeman(Unit):
@@ -257,7 +359,7 @@ class Pikeman(Unit):
     def get_speed(self): return 1.0 * TILE
     def get_line_of_sight(self): return 4.0 * TILE
     def get_symbol(self): return "P"
-    def get_collision_radius(self): return 0.45 * TILE
+    def get_collision_radius(self): return 0.20 * TILE  # 0.45
     def get_attack_windup(self): return 0.20
 
 class Crossbowman(Unit):
@@ -270,7 +372,7 @@ class Crossbowman(Unit):
     def get_speed(self): return 0.96 * TILE
     def get_line_of_sight(self): return 7.0 * TILE
     def get_symbol(self): return "C"
-    def get_collision_radius(self): return 0.45 * TILE
+    def get_collision_radius(self): return 0.20 * TILE  # 0.45
     def get_attack_windup(self): return 0.30
 
 # ===== FACTORY =====
