@@ -13,16 +13,28 @@ class Napoleon(General):
         if not visible_enemies:
             return []
 
-        # 2. CHOIX DE LA CIBLE PRIORITAIRE (FOCUS FIRE)
-        # On choisit l'ennemi le plus "facile" à tuer pour réduire le nombre d'adversaires rapidement.
-        # Critère : Celui qui a le moins de PV actuels, ou le plus proche.
-        primary_target = min(visible_enemies, key=lambda e: (e.current_hp, self.get_avg_distance(e, units_needing_orders)))
+        # 2. CHOIX DE LA CIBLE PRIORITAIRE GLOBALE
+        # On garde la logique : taper le plus faible pour réduire le nombre d'ennemis.
+        primary_target = min(visible_enemies, key=lambda e: e.current_hp)
 
-        # 3. Tout le monde attaque la MEME cible (si à portée/faisable)
+        # Seuil de distance (en pixels). 200 pixels = environ 6 cases (6 * 32).
+        # Si un soldat est plus loin que ça, il ne doit pas essayer de rejoindre la mêlée centrale.
+        MAX_FOCUS_DISTANCE = 200.0
+
         for unit in units_needing_orders:
-            # Si l'unité est trop loin de la cible prioritaire, elle peut taper le plus proche en attendant
-            # Mais l'idéal est de converger vers la cible prioritaire.
-            orders.append({'type': 'attack', 'unit': unit, 'target': primary_target})
+            dist_to_primary = unit.distance_to(primary_target)
+
+            # --- LOGIQUE INTELLIGENTE ANTI-BOUCHON ---
+            
+            # Cas A : Je suis assez près de la cible prioritaire -> JE FOCUS
+            if dist_to_primary <= MAX_FOCUS_DISTANCE:
+                orders.append({'type': 'attack', 'unit': unit, 'target': primary_target})
+            
+            # Cas B : Je suis trop loin -> J'attaque le plus proche pour avancer
+            else:
+                closest_local = self.get_closest(unit, visible_enemies)
+                if closest_local:
+                    orders.append({'type': 'attack', 'unit': unit, 'target': closest_local})
         
         return orders
 
@@ -33,8 +45,6 @@ class Napoleon(General):
                 enemies.extend(p.get_alive_units())
         return enemies
 
-    def get_avg_distance(self, enemy, my_units):
-        """Calcule la distance moyenne entre un ennemi et mon armée (pour éviter de focus un mec à l'autre bout de la map)"""
-        if not my_units: return 0
-        total_dist = sum(unit.distance_to(enemy) for unit in my_units)
-        return total_dist / len(my_units)
+    def get_closest(self, unit, candidates):
+        if not candidates: return None
+        return min(candidates, key=lambda e: unit.distance_to(e))
