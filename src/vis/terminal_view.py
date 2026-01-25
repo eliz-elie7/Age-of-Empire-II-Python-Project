@@ -168,9 +168,22 @@ class TerminalView(View) :
     # DESSIN
     # =============================
     def _draw_info(self, start_y, game_state):
-        for i, line in enumerate(self._info_lines(game_state)):
+
+        lines = self._info_lines(game_state)
+        color = curses.color_pair(0)
+
+        for i, line in enumerate(lines):
+            if "Army A" in line or "Joueur 1" in line:
+                color = curses.color_pair(1) # Bleu
+            
+            elif "Army B" in line or "Joueur 2" in line:
+                color = curses.color_pair(2) # Rouge
+            
+            elif "---" in line:
+                color = curses.color_pair(4)
+        
             try:
-                self.stdscr.addstr(start_y + i, 0, line[:self.view_w])
+                self.stdscr.addstr(start_y + i, 0, line[:self.view_w], color)
             except curses.error:
                 pass
 
@@ -210,12 +223,47 @@ class TerminalView(View) :
     # TAILLE MAP = f(TAILLE INFO)
     # =============================
     def _info_lines(self, game_state):
-        return [
-            "---COMMANDES---\n"
-            "[T] : Quitter |"
-            " [ZQSD] / Flèches : Caméra |"
-            " [P] : Pause/Play |"
-            " [F11] : Save | [F12] : load |"
-            " [Tab] : HTLM doc\n"
-            f"Cam: ({self.cam_x},{self.cam_y}) | Map: {self.map_width}x{self.map_height}"
-        ]
+        lines = ["--- MEDIEVAIL INFO ---"]
+    
+        current_time = getattr(self.battle, 'time', 0.0)
+        lines.append(f"Time : {current_time:.1f}s")
+        lines.append("-" * 30)
+
+        players = game_state.get('players', [])
+
+        # Trad des symboles en noms
+        mapping = {'K': 'Knights', 'P': 'Pikemen', 'A': 'Archers', 'S': 'Soldiers'}
+        for i, player in enumerate(players):
+            total_alive = 0
+            stats_types = {}
+            
+            units = player.get('units', [])
+            army_name = player.get('name', f"Player {i+1}")
+
+            for u in units:
+                if u.get('hp', 0) > 0 and u.get('state') != "dead":
+                    total_alive += 1
+                    sym = u.get('symbol', '?')
+                    name = mapping.get(sym, sym) 
+                    stats_types[name] = stats_types.get(name, 0) + 1
+
+            # AFFICHAGE
+            lines.append(f"{army_name} : {total_alive} alive")
+        
+            # Utilisation des résultats du mapping
+            detail_str = "   |_ "
+            # Ici, 's' est déjà le nom complet car on l'a mappé au-dessus
+            details = [f"{s}: {n}" for s, n in stats_types.items()]
+        
+            if details:
+                lines.append(detail_str + " | ".join(details))
+            else:
+                lines.append("   |_ (Plus aucune unité active)")
+        
+
+        lines.append("---COMMANDS---")
+        lines.append("[T] Quit | [ZQSD]/Arrow Cam | [P] Pause/Play | [Tab] HTML Doc")
+        lines.append("[F11/F12] : Save/load | [F9] : 2.5D")
+        lines.append(f"CAM: ({self.cam_x//TILE},{self.cam_y//TILE})")
+
+        return lines
