@@ -278,9 +278,9 @@ class Crossbowman(Unit):
         # Cela permet à l'armure "pierce_armor" des cibles de fonctionner.
         return "pierce"
     ##--unités supplémentaires ici--
-    class LongSwordsman(Unit):
-        """ Infanterie standard. Fort au corps à corps, bat les Piquiers et les Skirmishers, mais meurt contre les Chevaliers et Archers. """
-        def get_max_hp(self): return 60
+class LongSwordsman(Unit):
+    """ Infanterie standard. Fort au corps à corps, bat les Piquiers et les Skirmishers, mais meurt contre les Chevaliers et Archers. """
+    def get_max_hp(self): return 60
     def get_attack(self): return 9
     def get_melee_armor(self): return 1
     def get_pierce_armor(self): return 1
