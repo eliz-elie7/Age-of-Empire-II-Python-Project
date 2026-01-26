@@ -1,6 +1,9 @@
 from .General import General
 
 class King_Julian(General):
+
+    def __init__(self):
+        super().__init__("King_Julian")
     def __init__(self, team_name):
         self.team = team_name
         self.strategy = "UNDECIDED"
