@@ -145,27 +145,32 @@ class Battle:
                 u.x, u.y = self.world_map.clamp_position(u.x, u.y)
 
             # ===============================
-            # 4) NETTOYAGE DES MORTS
-            # ===============================
-            for p in self.players:
-                # On garde l'unité si ses PV sont > 0
-                p.squad = [u for u in p.squad if u.current_hp > 0]
-
-            # ===============================
-            # 5) CONDITION DE VICTOIRE
+            # 4) CONDITION DE VICTOIRE
             # ===============================
             alive_players = [
-                p for p in self.players
+                p for p in self.players 
                 if any(u.current_hp > 0 for u in p.squad)
             ]
 
+            # Si c'est fini, on nettoie UNE DERNIÈRE FOIS avant de partir
             if len(alive_players) <= 1:
+                for p in self.players:
+                    p.squad = [u for u in p.squad if u.current_hp > 0]
+                
                 self.finished = True
                 if len(alive_players) == 1:
                     self.winner = alive_players[0]
-                break # Sortie de la boucle speed si fini
+                
+                last_state = self.get_state() # On capture l'état "propre" sans le mort
+                break 
 
-            # Mise à jour du state pour le dernier micro-tick de la boucle
+            # ===============================
+            # 5) NETTOYAGE STANDARD (si le combat continue)
+            # ===============================
+            for p in self.players:
+                p.squad = [u for u in p.squad if u.current_hp > 0]
+
+            # Mise à jour du state pour le tick normal
             last_state = self.get_state()
 
         return last_state
@@ -186,11 +191,11 @@ class Battle:
                     "x": float(u.x),
                     "y": float(u.y),
                     "hp": float(u.current_hp),
-                    "order": u.current_order,
+                    "order": u._current_order,
                     "direction": u.direction,
                     "state": (
                         "dead" if not u.is_alive
-                        else u.current_order or "idle"
+                        else u._current_order or "idle"
                     )
                     
                 })

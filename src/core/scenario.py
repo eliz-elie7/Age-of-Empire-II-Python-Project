@@ -283,18 +283,14 @@ def skirmish_scenario(unit_type, N, general_a, general_b):
 # REGISTRY
 # ============================================================
 
-SCENARIOS = {
+"""SCENARIOS = {
     "lanchester": lanchester_scenario,
     "mirror": mirror_scenario,
     "skirmish": skirmish_scenario,
-}
+}"""
 
 
-def get_scenario(name: str):
-    try:
-        return SCENARIOS[name.lower()]
-    except KeyError:
-        raise ValueError(f"Scénario inconnu : {name}")
+
 # ============================================================
 # EXPÉRIMENTATIONS (Lanchester)
 # ============================================================
@@ -342,3 +338,96 @@ def run_lanchester_experiment(
                 # print( f"N={N} | winner={battle.winner.name} | "f"total_hp_lost={total_hp_lost}")
 
     return data
+
+def combined_arms_scenario(N, types_a, types_b, general_a, general_b):
+    """
+    Scénario N vs N avec mixité d'unités.
+    - N : Nombre total d'unités par armée.
+    - types_a / types_b : Liste de UnitType (ex: [KNIGHT, PIKEMAN])
+    """
+    player_a = Player("Combined A", general_a)
+    player_a.color = "Blue"
+    player_b = Player("Combined B", general_b)
+    player_b.color = "Red"
+
+    # Carte large pour les manœuvres
+    world_map = Map(width=150 * TILE, height=150 * TILE, collision_allowance=0.2)
+    all_units = []
+    
+    SPACING = int(1.4 * TILE)
+    LINE_GAP = int(2.5 * TILE) # Espace entre les différentes lignes d'unités
+    ARMY_GAP = 15 * TILE       # Espace entre les deux armées au centre
+    
+    mid_x = world_map.get_width() / 2
+    mid_y = world_map.get_height() / 2
+
+    def spawn_mixed_army(player, start_x, direction_sign, types_list):
+        """
+        direction_sign: -1 pour l'armée à gauche (regarde vers la droite), 
+                         1 pour l'armée à droite (regarde vers la gauche)
+        """
+        num_types = len(types_list)
+        n_per_type = N // num_types
+        
+        current_x = start_x
+        
+        for u_type in types_list:
+            # Calcul de la formation pour ce groupe
+            rows = max(1, int(math.sqrt(n_per_type)))
+            cols = math.ceil(n_per_type / rows)
+            
+            group_height = (rows - 1) * SPACING
+            group_y = mid_y - group_height / 2
+            
+            # Ajustement du X pour que la ligne soit bien placée
+            # Si armée A (sign -1), on recule vers la gauche pour chaque nouveau type
+            # Si armée B (sign 1), on recule vers la droite
+            draw_x = current_x if direction_sign == 1 else current_x - (cols * SPACING)
+            
+            spawn_square(
+                player,
+                world_map,
+                all_units,
+                u_type,
+                draw_x,
+                group_y,
+                rows,
+                cols,
+                SPACING,
+                n_per_type
+            )
+            
+            # On décale le X pour la prochaine ligne (le prochain type d'unité)
+            current_x += direction_sign * (cols * SPACING + LINE_GAP)
+
+    # Armée A (à gauche du centre, se développe vers la gauche)
+    spawn_mixed_army(player_a, mid_x - ARMY_GAP/2, -1, types_a)
+
+    # Armée B (à droite du centre, se développe vers la droite)
+    spawn_mixed_army(player_b, mid_x + ARMY_GAP/2, 1, types_b)
+
+    return [player_a, player_b], world_map
+
+SCENARIO_CONFIG = {
+    "lanchester": {
+        "fn": lanchester_scenario,
+        "args": [UnitType.KNIGHT, 5]  # [Type, N]
+    },
+    "mirror": {
+        "fn": mirror_scenario,
+        "args": [UnitType.PIKEMAN, 20]
+    },
+    "skirmish": {
+        "fn": skirmish_scenario,
+        "args": [UnitType.CROSSBOWMAN, 5]
+    },
+    "combined": {
+        "fn": combined_arms_scenario,
+        "args": [20, [UnitType.PIKEMAN, UnitType.CROSSBOWMAN], [UnitType.KNIGHT]] # [N, types_a, types_b]
+    }
+}
+def get_scenario(name: str):
+    try:
+        return SCENARIO_CONFIG[name.lower()]
+    except KeyError:
+        raise ValueError(f"Scénario inconnu : {name}")

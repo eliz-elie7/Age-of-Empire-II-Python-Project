@@ -9,6 +9,7 @@ import pygame
 # --- Imports du Moteur ---
 from src.core.units import UnitType
 from src.core.scenario import get_scenario
+from src.core.scenario import SCENARIO_CONFIG
 from src.ai import get_general
 
 from src.core.battle import Battle
@@ -89,17 +90,27 @@ def print_battle_summary(battle: Battle):
 # 3. EXÉCUTION (RUN)
 # ============================================================
 def run_battle(args):
-    # --- 1. Préparation du Scénario et des IA ---
-    scenario_fn = get_scenario(args.scenario)
+    # 1. On récupère la config du scénario choisi
+    config = SCENARIO_CONFIG.get(args.scenario)
+    if not config:
+        raise ValueError(f"Scénario inconnu : {args.scenario}")
+
+    scenario_fn = config["fn"]
+    # On récupère les arguments spécifiques au scénario (ex: [UnitType, N])
+    extra_params = config.get("args", [])
+
+    # 2. On instancie les IA
     general_a = get_general(args.ai_a)
     general_b = get_general(args.ai_b)
 
+    # 3. APPEL GÉNÉRALISÉ
+    # On déballe les paramètres spécifiques, puis on ajoute les généraux
+    # Signature finale : scenario_fn(param1, param2, ..., general_a, general_b)
     try:
-        # Tentative scénario complexe
-        players, world_map = scenario_fn(UnitType.KNIGHT, 10 , general_a, general_b)
-    except TypeError:
-        # Tentative scénario simple
-        players, world_map = scenario_fn(general_a, general_b)
+        players, world_map = scenario_fn(*extra_params, general_a, general_b)
+    except Exception as e:
+        print(f"Erreur lors du lancement du scénario {args.scenario}: {e}")
+        return
     
     start_count_a = len(players[0].squad)
     start_count_b = len(players[1].squad)
@@ -175,7 +186,6 @@ def run_battle(args):
         # C) Rendu Visuel
         if game_state:
             viewer.render(game_state)
-        
         # D) Limitation de la boucle d'affichage
         time.sleep(FRAME_DELAY)
 
@@ -226,14 +236,19 @@ def tourney(args):
 
     print(f"⚔️  Démarrage du tournoi : {len(args.generals)} Généraux sur {len(args.scenarios)} Scénarios")
 
-    # --- 2. Boucle du Tournoi ---
     for scenario_name in args.scenarios:
-        scenario_fn = get_scenario(scenario_name)
+        # RÉCUPÉRATION DE LA CONFIG
+        config = SCENARIO_CONFIG.get(scenario_name)
+        if not config:
+            print(f"⚠️ Scénario {scenario_name} ignoré (pas de config)")
+            continue
+            
+        scenario_fn = config["fn"]
+        extra_params = config.get("args", [])
 
         for ai1, ai2 in product(args.generals, repeat=2):
             for n in range(args.N):
-
-                # Gestion de l'inversion (Player 1 vs Player 2)
+                # Gestion de l'inversion
                 if not args.na and n % 2 == 1:
                     a, b = ai2, ai1 
                 else:
@@ -242,20 +257,19 @@ def tourney(args):
                 general_a = get_general(a)
                 general_b = get_general(b)
 
-                # players[0] est piloté par 'a', players[1] par 'b'
-                players, world_map = scenario_fn(UnitType.KNIGHT, 5, general_a, general_b)
+                # --- APPEL GÉNÉRALISÉ ---
+                # On passe les paramètres du dictionnaire + les deux généraux
+                players, world_map = scenario_fn(*extra_params, general_a, general_b)
+                
                 battle = Battle(players, world_map)
-
                 battle_result = battle.run()
 
-                # --- 3. DÉTECTION ROBUSTE DU VAINQUEUR ---
-                # On regarde quel OBJET Player a gagné, pas son nom.
+                # --- DÉTECTION DU VAINQUEUR ---
                 actual_winner_ai_name = None
-                
                 if battle.winner == players[0]:
-                    actual_winner_ai_name = a  # C'est l'IA 'a' qui a gagné
+                    actual_winner_ai_name = a
                 elif battle.winner == players[1]:
-                    actual_winner_ai_name = b  # C'est l'IA 'b' qui a gagné
+                    actual_winner_ai_name = b
                 
                 # Enregistrement brut (JSON)
                 result = {
