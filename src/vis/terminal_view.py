@@ -1,264 +1,276 @@
-import os
-import sys
-import termios
-import tty
-import select
+import curses
 from .view_base import View
 
+#Valeur à mofifier selon si on veut plus ou moins de place pour afficher les infos de jeu
+CONST_W = 0
 
-"""class TerminalView:
-    Affichage propre et stable dans le terminal.
+TILE = 32
 
-    def __init__(self, fps: int = 25):
-        self.fps = fps
-        self._running = True
-
-        # Forcer clear chaque frame
-        self.last_clear_time = 0
-        self.clear_interval = 0.0
-
-        # 1 caractère = TILE pixels (aligné avec units.TILE). Choisi ici en dur pour éviter imports circulaires.
-        self.grid_size_factor = 32.0
-
-        self.min_width = 80
-        self.min_height = 20
-
-    def is_running(self) -> bool:
-        return self._running
-
-    def _clear_screen(self):
-        # Forcer l'effacement à chaque appel pour éviter affichages multiples entre clears
-        os.system('cls' if os.name == 'nt' else 'clear')
-        self.last_clear_time = time.time()
-
-    def draw(self, state: Dict[str, Any], world_map):
-        if not self._running:
-            return
-
-        self._clear_screen()
-
-        width_map = world_map.get_width()
-        height_map = world_map.get_height()
-
-        grid_width = max(self.min_width, math.ceil(width_map / self.grid_size_factor))
-        grid_height = max(self.min_height, math.ceil(height_map / self.grid_size_factor))
-
-        # Grille vide
-        grid = [['.' for _ in range(grid_width)] for _ in range(grid_height)]
-
-        # ============================
-        #   Placement des unités
-        # ============================
-        for player in state["players"]:
-            for unit in player["units"]:
-                gx = int(unit["x"] / self.grid_size_factor)
-                gy = int(unit["y"] / self.grid_size_factor)
-
-                if 0 <= gx < grid_width and 0 <= gy < grid_height:
-                    initial = player["name"][0]
-                    grid[gy][gx] = f"{initial}:{unit['symbol']}"
-
-        output = []
-        output.append("📊 STATS:")
-
-        for player in state["players"]:
-            output.append(f"  {player['name']}: {player['alive_units']} unités vivantes")
-
-            for unit in player["units"]:
-                output.append(
-                    f"    {unit['symbol']} @ ({unit['x']:.1f}, {unit['y']:.1f}) "
-                    f"HP:{unit['hp']}  Ordre:{unit['order']}"
-                )
-
-        output.append("=" * grid_width)
-
-        for row in grid:
-            output.append(" ".join(row))
-
-        output.append("=" * grid_width)
-
-        output.append(f"🕰️ Temps: {state['game_time']:.2f}s / {state['total_time']:.0f}s")
-
-        if state["finished"]:
-            output.append(f"🏆 Vainqueur: {state['winner']}")
-
-        print("\n".join(output))"""
-# src/view/terminal_view.py
-
-class TerminalView(View):
-    """Affichage propre et stable dans le terminal (hérite de View)."""
-
-    def __init__(self, min_width=60, min_height=40, zoom = 16):
+class TerminalView(View) :
+    def __init__(self):
         super().__init__()
-        self.width = min_width
-        self.height = min_height
-        self.last_clear_time = 0
-        self.clear_interval = 0.0
-        self.zoom = zoom
-        # rétrocompatibilité : accepte encore draw(state, world_map)
-        # on ne stocke pas fps ici (géré par main)
-    def clear(self):
-        """Efface le terminal proprement."""
-        os.system('cls' if os.name == 'nt' else 'clear')
-    # -------------------------
-    # utilitaire : lecture non bloquante d'une touche
-    # -------------------------
-    def _get_char_non_blocking(self):
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setcbreak(fd)
-            # select pour tester si un caractère est prêt
-            r, _, _ = select.select([sys.stdin], [], [], 0)
-            if r:
-                ch = sys.stdin.read(1)
-                return ch
-            return None
-        except Exception:
-            return None
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-    # -------------------------
-    # API View
-    # -------------------------
-    def on_enter(self, battle, game_state):
-        self._switch_requested = False
-        self._running = True
-        os.system('clear')
-
-    def render(self, game_state):
-        """Render terminal : grille ASCII centrée automatiquement + stats.
-        Exige game_state comme dict produit par Battle._build_state_snapshot().
-        """
-        # clear terminal
-        self.clear()
-
-        # sécurité : players sous forme de liste de dicts
-        players = game_state.get("players", []) if game_state else []
-
-        # Récupérer toutes les unités (plat)
-        units_all = []
-        for p_idx, p in enumerate(players):
-            for u in p.get("units", []):
-                units_all.append((p_idx, p.get("name", f"Player{p_idx}"), u))
-
-        # Si pas d'unités, afficher juste les stats
-        if not units_all:
-            print("Aucune unité à afficher.")
-            print("📊 STATS:")
-            for p in players:
-                print(f"  {p.get('name')}: {p.get('alive_units', 0)} unités vivantes")
-            return
-
-        # Calculer bounding box des unités pour centrer la vue
-        xs = [u[2]["x"] for u in units_all]
-        ys = [u[2]["y"] for u in units_all]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-
-        # centre du groupe
-        center_x = (min_x + max_x) / 2.0
-        center_y = (min_y + max_y) / 2.0
-
-        # world coords de la case (0,0) de la grille (top-left) : centrer la fenêtre
-        half_w_world = (self.width - 1) * self.zoom / 2.0
-        half_h_world = (self.height - 1) * self.zoom / 2.0
-        top_left_x = center_x - half_w_world
-        top_left_y = center_y - half_h_world
-
-        # Préparer la grille vide
-        grid = [["." for _ in range(self.width)] for _ in range(self.height)]
-
-        # Couleurs ANSI simples
-        COLORS = ["\033[91m", "\033[94m", "\033[92m", "\033[93m"]  # rouge / bleu / vert / jaune
-        RESET = "\033[0m"
-
-        # Placements : si plusieurs unités sur même case, on montre un chiffre de pile
-        cell_counts = {}  # (gx,gy) -> dict{player_idx:count, total:count, symbol:last_symbol}
-
-        for p_idx, pname, u in units_all:
-            # lire coords depuis snapshot dict
-            x = float(u.get("x", 0.0))
-            y = float(u.get("y", 0.0))
-
-            # conversion vers grille en tenant compte du top-left
-            gx = int((x - top_left_x) / self.zoom)
-            gy = int((y - top_left_y) / self.zoom)
-
-            if 0 <= gx < self.width and 0 <= gy < self.height:
-                key = (gx, gy)
-                entry = cell_counts.get(key)
-                if entry is None:
-                    entry = {"total": 0, "by_player": {}, "symbol": u.get("symbol", "?"), "last_player": p_idx}
-                    cell_counts[key] = entry
-                entry["total"] += 1
-                entry["by_player"][p_idx] = entry["by_player"].get(p_idx, 0) + 1
-                entry["symbol"] = u.get("symbol", entry["symbol"])
-                entry["last_player"] = p_idx
-
-        # Remplir la grille avec le meilleur affichage possible
-        for (gx, gy), entry in cell_counts.items():
-            total = entry["total"]
-            last_player = entry["last_player"]
-            symbol = entry["symbol"] if total == 1 else str(total)  # si pile -> montrer le nombre
-
-            # coloriser par joueur (s'il y a plusieurs joueurs, utiliser la dernière unité)
-            color = COLORS[last_player % len(COLORS)]
-            grid[gy][gx] = f"{color}{symbol}{RESET}"
-
-        # Afficher la grille
-        for row in grid:
-            print(" ".join(row))
-
-        # Infos sous la grille
-        print("\nZoom:", self.zoom)
-        print("Commandes : [Q] quitter  •  [F9] changer de vue\n")
-
-        # Affichage des stats (par joueur)
-        print("📊 STATS:")
-        for p in players:
-            name = p.get("name", "Unknown")
-            alive = p.get("alive_units", len([u for u in p.get("units", []) if u.get("hp", 0) > 0]))
-            print(f"  {name}: {alive} unités vivantes")
-            # afficher résumé compact (up to 6 unités)
-            units_list = p.get("units", [])
-            for u in units_list[:6]:
-                print(f"    {u.get('symbol','?')} @ ({u.get('x',0):.1f},{u.get('y',0):.1f}) HP:{u.get('hp',0):.0f} State:{u.get('state')}")
-
-        # si tu veux debug : afficher bbox et center
-        # print(f"\nDBG bbox x:{min_x:.1f}-{max_x:.1f} y:{min_y:.1f}-{max_y:.1f} center:{center_x:.1f},{center_y:.1f}")
-
+        self.stdscr = None
     
-    def handle_input(self, key=None):
-        """Lecture non bloquante si key None. Retourne un event optionnel."""
-        if key is None:
-            key = self._get_char_non_blocking()
+        #Camera (coo haut gauche de la vue)
+        self.cam_x, self.cam_y = 0,0
 
-        if key is None:
+        #taille d'affichage de map dans le terminal
+        self.view_h=0
+        self.view_w=0  
+
+        #limites de map
+        self.map_width = 0
+        self.map_height = 0   
+
+    # =============================
+    # Def methodes View
+    # =============================
+    def on_enter(self, battle, game_state): # nouveau main
+        self.running = True
+        self._switch_requested = False
+        self.battle = battle
+        self.map_width = battle.world_map.get_width()
+        self.map_height = battle.world_map.get_height()
+
+        self.stdscr = curses.initscr()
+        self._init_curses()
+
+        self._init_screen(game_state)
+        self.center_cam(game_state)
+        
+    def render(self, game_state): #draw terminal
+        self.stdscr.erase()
+        self._draw_map(game_state)
+        self._draw_info(self.view_h, game_state)
+        self.stdscr.refresh()
+
+    def handle_input(self):
+        key = self.stdscr.getch()
+
+        if key == -1:
             return None
 
-        k = key.lower()
-
-        if k == 'q':
-            # arrête la vue (main doit détecter et arrêter la boucle si besoin)
+        #Arret d'affichage
+        if key == ord('t') or key == ord('t'):
             self.stop()
-            return "QUIT"
+            return "quit"
 
-        # Certains terminaux n'envoyent pas F9 comme code simple,
-        # on laisse aussi la touche '9' et ESC comme fallback
-        if k == '\x1b' or k == '9':
-            self.request_switch()
-            return "SWITCH"
+        # Demande de changement de vue
+        if key == curses.KEY_F9:
+            return "switch_view"
 
-        # sinon rien
+        #Déplacer la caméra
+        if key==curses.KEY_UP or key == ord('z'):
+            self.cam_y-= TILE
+        elif key==curses.KEY_DOWN or key == ord('s'):
+            self.cam_y+= TILE
+        elif key==curses.KEY_LEFT or key == ord('q'):
+            self.cam_x-= TILE
+        elif key==curses.KEY_RIGHT or key == ord('d'):
+            self.cam_x+= TILE
+
+        if key == ord('Z'):
+            self.cam_y-= TILE*10
+        elif key == ord('S'):
+            self.cam_y+= TILE*10
+        elif key == ord('Q'):
+            self.cam_x-= TILE*10
+        elif key == ord('D'):
+            self.cam_x+= TILE*10
+
+        if key== ord('p') or key == ord('P'):
+            return "Pause"  
+
+        if key == 9 or key == ord('\t'):
+            return "\t"
+        
+        if key == curses.KEY_F11:
+            return "save"
+        
+        if key == curses.KEY_F12:
+            return "load"
+
+        """#Recentrer caméra
+        if key== ord('c'):
+            self.center_camera(game_state)"""
+
+        self._limit_camera() #fonctionde sécurité
         return None
 
     def on_exit(self):
-        # nettoyage éventuel
-        os.system('cls' if os.name == 'nt' else 'clear')
+        if self.stdscr:
+            curses.nocbreak()
+            self.stdscr.keypad(False)
+            curses.echo()
+            curses.endwin()
 
-    # -------------------------
-    # Rétrocompatibilité avec l'ancien code qui appelait draw(state, world_map)
-    # -------------------------
-   
+    # =============================
+    # LOGIQUE INTERNE (Ne pas utiliser)
+    # =============================
+    def _init_curses(self):
+        curses.noecho()   
+        curses.cbreak()
+        self.stdscr.keypad(True)    #Actctivation de la lecture du clavier
+        self.stdscr.nodelay(True)   #Mode non bloquant si getch() n'a pas recu de valeur
+        try:
+            curses.curs_set(0)      # Cache le curseur
+        except curses.error:
+            pass
+
+        curses.start_color()
+        curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)      # Paire 2: rouge sur noir
+        curses.init_pair(1, curses.COLOR_BLUE, curses.COLOR_BLACK)     # Paire 1: bleu sur noir
+        curses.init_pair(3, curses.COLOR_GREEN, curses.COLOR_BLACK)    # Paire 3: vert sur noir
+        curses.init_pair(4, curses.COLOR_YELLOW, curses.COLOR_BLACK)   # Paire 4: jaune sur noir
+        curses.init_pair(5, curses.COLOR_CYAN, curses.COLOR_BLACK)     # Paire 5: cyan sur noir
+
+    def _init_screen(self, game_state):
+        height, width = self.stdscr.getmaxyx()   #taille du terminal
+        info_h = len(self._info_lines(game_state))         #Calcul de la taille de la barre d'info
+        self.view_h = max(0, height - info_h - 1)    #Permet de connaitre la taille de la map
+        self.view_w = width - CONST_W
+
+    # =============================
+    # CAMERA
+    # =============================
+    def center_cam(self, game_state):
+        all_x = []
+        all_y = []
+        for p in game_state["players"]:
+            for u in p["units"]:
+                all_x.append(u["x"])
+                all_y.append(u["y"])
+
+        if not all_x:
+            return
+
+        avg_x = sum(all_x) / len(all_x)
+        avg_y = sum(all_y) / len(all_y)
+
+        #Centrer (/!\on est en pixel =>(* 32))
+        view_w_px = (self.view_w * TILE)/2
+        view_h_px = (self.view_h * TILE)/2
+
+        self.cam_x = int(avg_x - (view_w_px / 2))
+        self.cam_y = int(avg_y - (view_h_px / 2))
+
+        self._limit_camera()
+
+
+    def _limit_camera(self):
+        max_x = self.map_width - (self.view_w * TILE)
+        max_y = self.map_height - (self.view_h * TILE)
+
+        self.cam_x = max(0, min(self.cam_x, self.map_width - self.view_w))
+        self.cam_y = max(0, min(self.cam_y, self.map_height - self.view_h))
+
+    # =============================
+    # DESSIN
+    # =============================
+    def _draw_info(self, start_y, game_state):
+
+        lines = self._info_lines(game_state)
+        color = curses.color_pair(0)
+
+        for i, line in enumerate(lines):
+            if "Army A" in line or "Joueur 1" in line:
+                color = curses.color_pair(1) # Bleu
+            
+            elif "Army B" in line or "Joueur 2" in line:
+                color = curses.color_pair(2) # Rouge
+            
+            elif "---" in line:
+                color = curses.color_pair(4)
+        
+            try:
+                self.stdscr.addstr(start_y + i, 0, line[:self.view_w], color)
+            except curses.error:
+                pass
+
+    
+    def _draw_map(self, game_state):                    #tel quel
+        units_by_cell = {}
+        for i, p in enumerate(game_state["players"]): #recup unit
+            color_id=i+1
+            for u in p["units"]:
+                x = int(u["x"]) //TILE  #les coordonné des unité sont en case et non en pixel
+                y = int(u["y"]) //TILE
+                
+                #Si MERVEILLE
+                if u.get('symbol') == 'W':
+                    for dx in range(-2, 3): # de -2 à +2 (total 5)
+                        for dy in range(-2, 3):
+                            units_by_cell[(x + dx, y + dy)] = (u, color_id)
+                else :
+                    units_by_cell[(x, y)] = (u, color_id)
+
+        for y in range(self.view_h):
+            for x in range(self.view_w):
+                #cam_x cam_y montre dans quelle partie de la map (carte pour éviter ambiguité) on est, x et y montre à quel endroit sur cette "page" on est.
+                tile_x = (self.cam_x // TILE) + x
+                tile_y = (self.cam_y // TILE) + y
+
+                #si la ligne ou la colonne demandé n'existe pas
+                if tile_y >= self.map_height //TILE or tile_x >= self.map_width //TILE:
+                    continue
+
+                if (tile_x, tile_y) in units_by_cell:
+                    unit_data, col_id = units_by_cell[(tile_x, tile_y)]
+                    char = unit_data["symbol"]
+
+                    try:
+                        self.stdscr.addch(y, x, char, curses.color_pair(col_id))
+                    except curses.error: pass
+                else:
+                    try:
+                        self.stdscr.addch(y, x, ".") 
+                    except curses.error: pass 
+
+    # =============================
+    # TAILLE MAP = f(TAILLE INFO)
+    # =============================
+    def _info_lines(self, game_state):
+        lines = ["--- MEDIEVAIL INFO ---"]
+    
+        current_time = getattr(self.battle, 'time', 0.0)
+        lines.append(f"Time : {current_time:.1f}s")
+        lines.append("-" * 30)
+
+        players = game_state.get('players', [])
+
+        # Trad des symboles en noms
+        mapping = {'K': 'Knights', 'P': 'Pikemen', 'A': 'Archers', 'S': 'Soldiers'}
+        for i, player in enumerate(players):
+            total_alive = 0
+            stats_types = {}
+            
+            units = player.get('units', [])
+            army_name = player.get('name', f"Player {i+1}")
+
+            for u in units:
+                if u.get('hp', 0) > 0 and u.get('state') != "dead":
+                    total_alive += 1
+                    sym = u.get('symbol', '?')
+                    name = mapping.get(sym, sym) 
+                    stats_types[name] = stats_types.get(name, 0) + 1
+
+            # AFFICHAGE
+            lines.append(f"{army_name} : {total_alive} alive")
+        
+            # Utilisation des résultats du mapping
+            detail_str = "   |_ "
+            # Ici, 's' est déjà le nom complet car on l'a mappé au-dessus
+            details = [f"{s}: {n}" for s, n in stats_types.items()]
+        
+            if details:
+                lines.append(detail_str + " | ".join(details))
+            else:
+                lines.append("   |_ (Plus aucune unité active)")
+        
+
+        lines.append("---COMMANDS---")
+        lines.append("[T] Quit | [ZQSD]/Arrow Cam | [P] Pause/Play | [Tab] HTML Doc")
+        lines.append("[F11/F12] : Save/load | [F9] : 2.5D")
+        lines.append(f"CAM: ({self.cam_x//TILE},{self.cam_y//TILE})")
+
+        return lines

@@ -124,7 +124,7 @@ class Battle:
             p.squad = [u for u in p.squad if u.current_hp > 0]
 
         # ===============================
-        # 5) CONDITION DE VICTOIRE
+        # 5) CONDITIONs DE VICTOIRE
         # ===============================
         alive_players = [
             p for p in self.players
@@ -134,6 +134,15 @@ class Battle:
         if len(alive_players) == 1:
             self.finished = True
             self.winner = alive_players[0]
+
+        for p in self.players:
+            wonders = [u for u in p.squad if u.get_symbol() == "W"]
+            if wonders:
+                if all(w.current_hp <= 0 for w in wonders):
+                    self.finished = True
+                    if p == self.player_1:
+                        self.winner = self.player_2
+                    else: self.winner = self.player_1
 
         # ===============================
         # 6) SNAPSHOT

@@ -13,6 +13,8 @@ class UnitType(Enum):
     CROSSBOWMAN = "crossbowman"
     LONGSWORDSMAN = "longswordsman"
     ELITESKIRMISHER = "eliteskirmisher"
+    WONDER = "wonder"
+
 
 class Unit:
     """Classe de base pour toutes les unités - RTS stable"""
@@ -315,6 +317,22 @@ class EliteSkirmisher(Unit):
         if isinstance(target, (LongSwordsman, Pikeman)):
             return 7  # Bonus contre l'infanterie
         return 0
+    
+class Wonder(Unit):
+    """ Bâtiment  accordant la victoire s'il est détruit par le joueur adverse"""
+    def get_max_hp(self): return 4800
+    def get_attack(self): return 0
+    def get_melee_armor(self): return 3
+    def get_pierce_armor(self): return 10
+    def get_range(self): return 0
+    def get_reload_time(self): return 1.5
+    def get_speed(self): return 0
+    def get_line_of_sight(self): return 8.0 * TILE
+    def get_symbol(self): return "W"
+    def get_collision_radius(self): return 2.5 * TILE
+
+    def get_bonus_damage(self, target: 'Unit') : return 0
+
 # ===== FACTORY =====
 
 def create_unit(unit_type: UnitType, x: float, y: float, player) -> Unit:
@@ -329,6 +347,8 @@ def create_unit(unit_type: UnitType, x: float, y: float, player) -> Unit:
         return LongSwordsman(x, y, player)
     if unit_type == UnitType.ELITESKIRMISHER:
         return EliteSkirmisher(x, y, player)
+    if unit_type == UnitType.WONDER:
+        return Wonder(x, y, player)
         
     raise ValueError(f"Type d'unité inconnu: {unit_type}")
 
