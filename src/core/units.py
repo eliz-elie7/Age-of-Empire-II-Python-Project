@@ -34,6 +34,8 @@ class Unit:
         self.attack_cooldown = 0.0
         self.attack_windup_timer = 0.0
 
+        self.direction = "down"  # Pour l'affichage, valeurs : up, down, left, right
+
         # Anti-deadlock
         self.idle_timer = 0.0
 
@@ -236,30 +238,37 @@ class Unit:
     def update(self, battle, delta_time: float):
         if not self.is_alive: return
         
-        # On garde une référence à battle pour le calcul des dégâts
+        # On garde une référence pour les calculs internes
         self.battle = battle 
 
+        # 1. Gestion des Cooldowns
         self.attack_cooldown = max(0.0, self.attack_cooldown - delta_time)
 
-        # 1. SI EN WINDUP
+        # 2. Gestion du Windup (Animation d'attaque en cours)
         if self.attack_windup_timer > 0:
             self.attack_windup_timer -= delta_time
             if self.attack_windup_timer <= 0:
                 self._apply_combat_damage()
             return
 
-        # 2. VÉRIFICATION DE LA CIBLE
+        # 3. Logique de Cible et Orientation de Combat
         if self._current_order == "attack":
             target = self._order_data.get("target")
             if not target or not target.is_alive:
                 self.clear_order()
                 return
 
+            # --- FACE-À-FACE : On s'oriente vers l'ennemi ---
+            dx_face = target.x - self.x
+            dy_face = target.y - self.y
+            self._update_direction(dx_face, dy_face)
+
             dist = self.distance_to(target)
             
-            # BONUS DE PORTÉE : Les unités en hauteur voient plus loin / tirent plus loin
+            # Bonus de portée si on domine l'adversaire
             my_el = battle.world_map.get_elevation_at(self.x, self.y)
-            range_bonus = 15.0 if my_el > 0 else 0.0 # +15 pixels de portée sur une colline
+            target_el = battle.world_map.get_elevation_at(target.x, target.y)
+            range_bonus = 15.0 if my_el > target_el else 0.0
             
             eff_range = (self.get_range() + range_bonus + self.get_collision_radius() + target.get_collision_radius()) + 5.0
             
@@ -268,26 +277,50 @@ class Unit:
                     self.attack_windup_timer = self.get_attack_windup()
                     return 
                 else:
-                    return 
+                    return # En attente du cooldown, l'unité reste face à l'ennemi
 
-        # 3. MOUVEMENT (can_move_to contient maintenant le test de falaise)
+        # 4. Mouvement et Glissade
         vx, vy = self._compute_steering(battle)
 
         if vx != 0 or vy != 0:
+            # Si on bouge et qu'on n'est pas en combat, on s'oriente vers le mouvement
+            if self._current_order != "attack":
+                self._update_direction(vx, vy)
+
             nx = self.x + vx * delta_time
             ny = self.y + vy * delta_time
+            
             all_units = battle.all_units()
             
-            # Ici can_move_to va renvoyer False si la pente est > 1
+            # --- LOGIQUE DE GLISSADE CONTRE LE RELIEF ---
             if battle.world_map.can_move_to(self, nx, ny, all_units):
-                self.x, self.y = battle.world_map.clamp_position(nx, ny)
-            if not battle.world_map.can_move_to(self, nx, ny, all_units):
-                # Si on ne peut pas monter, on essaie de bouger uniquement sur l'axe X ou Y 
-                # pour longer la colline au lieu de s'arrêter net.
+                self.x, self.y = nx, ny
+            else:
+                # On tente de glisser sur l'axe X
                 if battle.world_map.can_move_to(self, nx, self.y, all_units):
                     self.x = nx
+                # Ou sur l'axe Y
                 elif battle.world_map.can_move_to(self, self.x, ny, all_units):
                     self.y = ny
+            
+            # Enfin, on reste dans les limites
+            self.x, self.y = battle.world_map.clamp_position(self.x, self.y)
+
+    def _update_direction(self, dx: float, dy: float):
+        """Calcule et stocke la direction cardinale (indépendant de la vue)"""
+        if abs(dx) < 0.01 and abs(dy) < 0.01:
+            return # On garde la direction précédente si pas de vecteur
+            
+        angle = math.degrees(math.atan2(dy, dx))
+        # Logique isométrique : 4 directions
+        if -45 <= angle <= 45: 
+            self.direction = "right"
+        elif 45 < angle <= 135: 
+            self.direction = "down"
+        elif -135 <= angle < -45: 
+            self.direction = "up"
+        else: 
+            self.direction = "left"
     # ===== ORDRES =====
 
     def _execute_move_order(self, delta_time: float, battle):
