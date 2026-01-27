@@ -21,6 +21,8 @@ def symbol_to_type(symbol: str) -> str:
     if "k" in s: return "knight"
     if "p" in s: return "pikeman"
     if "c" in s or "x" in s: return "crossbowman"
+    if "s" in s or "s" in s: return "longswordman"
+    if "e" in s: return "eliteskirmisher"
     return "knight"
 
 # ================== VIEW ==================
@@ -40,7 +42,7 @@ class IsometricView(View):
         self.ui_mode = 3 
         self.camera_x = 0.0
         self.camera_y = 0.0
-        self.zoom = 0.2
+        self.zoom = 0.15
         self.last_zoom = 0.2 
         self.freeze_camera_frames = 0
         
@@ -56,7 +58,7 @@ class IsometricView(View):
         self.auto_follow = True
         self.follow_smooth = 0.15
         self.zoom_speed = 1.03
-        self.min_zoom = 0.25
+        self.min_zoom = 0.05
         self.max_zoom = 4.0
         self.drag_sensitivity = 0.015
         self.dragging = False
@@ -93,9 +95,19 @@ class IsometricView(View):
                     if not fname.lower().endswith(".png"): continue
                     surf = pygame.image.load(os.path.join(cpath, fname)).convert_alpha()
                     
+                    if "eliteskirmisher" in u_key:
+                    # On définit le blanc (255, 255, 255) comme transparent
+                        bg_color = surf.get_at((0, 0))
+                        surf.set_colorkey(bg_color)
                     # --- AGRANDISSEMENT : base_scale à 2.2 au lieu de 1.5 ---
                     ow, oh = surf.get_size()
-                    base_scale = (TILE * 2.2) / max(ow, oh)
+                    #base_scale = (TILE * 2.2) / max(ow, oh)
+                    reference_dim = (ow + oh) / 2  # On prend la moyenne des deux dimensions
+                    base_scale = (TILE * 2.8) / reference_dim 
+
+                    # On ajuste spécifiquement pour les chevaliers s'ils restent trop petits
+                    if "knight" in u_key:
+                        base_scale *= 1.2  # On redonne 20% de taille aux cavaliers
                     surf = pygame.transform.smoothscale(surf, (int(ow * base_scale), int(oh * base_scale)))
                     
                     # On utilise le nom du fichier (sans extension) comme clé de direction
@@ -203,7 +215,7 @@ class IsometricView(View):
         y_off = 20
         for p in game_state.get("players", []):
             c_name = p.get("color", "white")
-            counts = {"knight": 0, "pikeman": 0, "crossbowman": 0}
+            counts = {"knight": 0, "pikeman": 0, "crossbowman": 0 , "longswordman": 0 , "eliteskirmisher": 0}
             for u in p.get("units", []):
                 counts[symbol_to_type(u.get("symbol"))] += 1
             

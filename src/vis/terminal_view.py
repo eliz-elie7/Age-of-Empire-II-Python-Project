@@ -79,7 +79,7 @@ class TerminalView(View) :
             self.cam_x+= TILE*10
 
         if key== ord('p') or key == ord('P'):
-            return "Pause"  
+            return "pause"  
 
         if key == 9 or key == ord('\t'):
             return "\t"
@@ -89,6 +89,9 @@ class TerminalView(View) :
         
         if key == curses.KEY_F12:
             return "load"
+        
+        if key== ord('k') or key == ord('K'):
+            return "accelerer"
 
         """#Recentrer caméra
         if key== ord('c'):

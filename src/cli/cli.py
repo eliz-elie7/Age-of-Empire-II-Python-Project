@@ -224,88 +224,69 @@ import json
 
 def tourney(args):
     results = []
-    
-    # --- 1. Initialisation ---
     stats = {}
+    
+    # 1. Initialisation
     for sc in args.scenarios:
         stats[sc] = {}
         for g1 in args.generals:
             stats[sc][g1] = {}
             for g2 in args.generals:
-                stats[sc][g1][g2] = {'wins': 0, 'matches': 0}
-
-    print(f"⚔️  Démarrage du tournoi : {len(args.generals)} Généraux sur {len(args.scenarios)} Scénarios")
+                stats[sc][g1][g2] = {'wins': 0, 'draws': 0, 'matches': 0}
 
     for scenario_name in args.scenarios:
-        # RÉCUPÉRATION DE LA CONFIG
         config = SCENARIO_CONFIG.get(scenario_name)
-        if not config:
-            print(f"⚠️ Scénario {scenario_name} ignoré (pas de config)")
-            continue
-            
+        if not config: continue
         scenario_fn = config["fn"]
         extra_params = config.get("args", [])
 
+        # Utilisation de product pour tester toutes les combinaisons
         for ai1, ai2 in product(args.generals, repeat=2):
+            if ai1 == ai2:
+                # Cas particulier : IA contre elle-même (ex: Braindead vs Braindead)
+                # On ne joue le match qu'une fois pour ne pas doubler les stats
+                for n in range(args.N):
+                    players, world_map = scenario_fn(*extra_params, get_general(ai1), get_general(ai2))
+                    players[0].name, players[1].name = "Army A", "Army B"
+                    battle_result = Battle(players, world_map).run()
+                    
+                    stats[scenario_name][ai1][ai2]['matches'] += 1
+                    if battle_result.winner is None:
+                        stats[scenario_name][ai1][ai2]['draws'] += 1
+                    else:
+                        # Dans un miroir, c'est forcément une victoire pour l'IA concernée
+                        stats[scenario_name][ai1][ai2]['wins'] += 1
+                continue
+
+            # Cas normal : Duel entre deux IAs différentes
             for n in range(args.N):
-                # Gestion de l'inversion
-                if not args.na and n % 2 == 1:
-                    a, b = ai2, ai1 
-                else:
-                    a, b = ai1, ai2
+                # Équité des camps
+                a_name, b_name = (ai2, ai1) if (not args.na and n % 2 == 1) else (ai1, ai2)
 
-                general_a = get_general(a)
-                general_b = get_general(b)
-
-                # --- APPEL GÉNÉRALISÉ ---
-                # On passe les paramètres du dictionnaire + les deux généraux
-                players, world_map = scenario_fn(*extra_params, general_a, general_b)
+                players, world_map = scenario_fn(*extra_params, get_general(a_name), get_general(b_name))
+                players[0].name, players[1].name = "Army A", "Army B"
                 
-                battle = Battle(players, world_map)
-                battle_result = battle.run()
+                battle_result = Battle(players, world_map).run()
+                name_map = {"Army A": a_name, "Army B": b_name, None: None}
+                real_winner = name_map.get(battle_result.winner)
 
-                # --- DÉTECTION DU VAINQUEUR ---
-                actual_winner_ai_name = None
-                if battle.winner == players[0]:
-                    actual_winner_ai_name = a
-                elif battle.winner == players[1]:
-                    actual_winner_ai_name = b
-                
-                # Enregistrement brut (JSON)
-                result = {
-                    "scenario": scenario_name,
-                    "ai_a": a,
-                    "ai_b": b,
-                    "round": n,
-                    "winner": actual_winner_ai_name, # On stocke le nom de l'IA, pas "Player 1"
-                    "turns": battle_result.turns,
-                    "duration": battle_result.duration,
-                    "remaining_units": battle_result.remaining_units,
-                }
-                results.append(result)
-
-                # --- 4. Aggregation pour le HTML ---
-                # Ici ai1 est la "ligne" du tableau, ai2 la "colonne"
+                # --- MISE À JOUR SYMÉTRIQUE ---
+                # On met à jour le compteur de matchs pour les deux cases
                 stats[scenario_name][ai1][ai2]['matches'] += 1
                 
-                if actual_winner_ai_name == ai1:
+                if real_winner is None:
+                    # Le nul profite aux deux cases
+                    stats[scenario_name][ai1][ai2]['draws'] += 1
+                elif real_winner == ai1:
+                    # Victoire pour l'IA de la LIGNE
                     stats[scenario_name][ai1][ai2]['wins'] += 1
                 
-                print(".", end="", flush=True)
+                # Note : Si c'est ai2 qui gagne, on ne fait rien ici. 
+                # Le point sera compté quand la boucle passera sur (ai2, ai1).
+                
+                print(f"🏁 {scenario_name} | {a_name} vs {b_name} | Vainqueur: {real_winner if real_winner else 'DRAW'}")
 
-    print("\n✅ Tournoi terminé.")
-
-    # --- 5. Export JSON ---
-    with open(args.datafile, "w") as f:
-        for r in results:
-            f.write(json.dumps(r) + "\n")
-
-    # --- 6. Génération HTML ---
-    try:
-        generate_tournament_report(stats, args.generals, args.scenarios)
-    except Exception as e:
-        print(f"❌ Erreur HTML : {e}")
-
+    generate_tournament_report(stats, args.generals, args.scenarios)
 # ============================================================
 def run_plot(args):
     from src.core.scenario import run_lanchester_experiment

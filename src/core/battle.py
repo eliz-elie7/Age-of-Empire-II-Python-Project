@@ -29,7 +29,7 @@ class Battle:
         players: List,
         world_map,
         logic_dt: float = 0.05,
-        max_time: float = 120.0
+        max_time: float = 300.0
     ):
         self.players = players
         self.map = world_map
@@ -80,6 +80,7 @@ class Battle:
 
             if self.time >= self.max_time:
                 self.finished = True
+                self.winner = None
                 break
 
             # Snapshot des unités vivantes au début de ce micro-tick
