@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu de Morpion - Tic-Tac-Toe</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .emoji {
+            font-size: 1.5em;
+        }
+
+        .info-section {
+            margin: 20px 0;
+        }
+
+        .current-player {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .player-x {
+            color: #e74c3c;
+        }
+
+        .player-o {
+            color: #3498db;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 30px auto;
+            max-width: 350px;
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            background: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 3em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .cell:disabled {
+            cursor: not-allowed;
+        }
+
+        .cell.x {
+            color: #e74c3c;
+        }
+
+        .cell.o {
+            color: #3498db;
+        }
+
+        .cell.winning {
+            background: #2ecc71;
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .score-section {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin: 20px 0;
+            font-size: 1.2em;
+        }
+
+        .score-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .score-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .score-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        button.control-btn {
+            padding: 12px 24px;
+            font-size: 1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        button.control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-new-game {
+            background: #3498db;
+        }
+
+        .btn-new-game:hover {
+            background: #2980b9;
+        }
+
+        .btn-reset-score {
+            background: #e74c3c;
+        }
+
+        .btn-reset-score:hover {
+            background: #c0392b;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-content h2 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+
+        .modal-content button {
+            margin-top: 20px;
+            padding: 12px 30px;
+            font-size: 1.1em;
+            font-weight: bold;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .modal-content button:hover {
+            background: #764ba2;
+            transform: scale(1.05);
+        }
+
+        @media (max-width: 500px) {
+            .game-container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .cell {
+                font-size: 2.5em;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            button.control-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1><span class="emoji">🎮</span> MORPION <span class="emoji">🎮</span></h1>
+        
+        <div class="info-section">
+            <div class="current-player" id="currentPlayer">
+                Joueur actuel: <span id="playerSymbol" class="player-x">X</span>
+            </div>
+        </div>
+
+        <div class="board" id="board">
+            <button class="cell" data-index="0"></button>
+            <button class="cell" data-index="1"></button>
+            <button class="cell" data-index="2"></button>
+            <button class="cell" data-index="3"></button>
+            <button class="cell" data-index="4"></button>
+            <button class="cell" data-index="5"></button>
+            <button class="cell" data-index="6"></button>
+            <button class="cell" data-index="7"></button>
+            <button class="cell" data-index="8"></button>
+        </div>
+
+        <div class="score-section">
+            <div class="score-item">
+                <div class="score-label" style="color: #e74c3c;">Joueur X</div>
+                <div class="score-value" id="scoreX">0</div>
+            </div>
+            <div class="score-item">
+                <div class="score-label" style="color: #3498db;">Joueur O</div>
+                <div class="score-value" id="scoreO">0</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn btn-new-game" onclick="resetGame()">
+                🔄 Nouvelle Partie
+            </button>
+            <button class="control-btn btn-reset-score" onclick="resetScore()">
+                ❌ Réinitialiser Score
+            </button>
+        </div>
+    </div>
+
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <h2 id="modalMessage"></h2>
+            <button onclick="closeModal()">Continuer</button>
+        </div>
+    </div>
+
+    <script>
+        // État du jeu
+        let currentPlayer = 'X';
+        let board = ['', '', '', '', '', '', '', '', ''];
+        let gameActive = true;
+        let scoreX = 0;
+        let scoreO = 0;
+
+        // Combinaisons gagnantes
+        const winningCombinations = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Lignes
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Colonnes
+            [0, 4, 8], [2, 4, 6]              // Diagonales
+        ];
+
+        // Initialiser le jeu
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach(cell => {
+            cell.addEventListener('click', handleCellClick);
+        });
+
+        function handleCellClick(e) {
+            const index = e.target.dataset.index;
+
+            if (!gameActive || board[index] !== '') {
+                return;
+            }
+
+            // Faire le coup
+            board[index] = currentPlayer;
+            e.target.textContent = currentPlayer;
+            e.target.classList.add(currentPlayer.toLowerCase());
+            e.target.disabled = true;
+
+            // Vérifier la victoire
+            if (checkWinner()) {
+                gameActive = false;
+                highlightWinningCombination();
+                updateScore();
+                showModal(`🎉 Le joueur ${currentPlayer} a gagné! 🎉`);
+                return;
+            }
+
+            // Vérifier le match nul
+            if (!board.includes('')) {
+                gameActive = false;
+                showModal('🤝 Match nul! Aucun gagnant. 🤝');
+                return;
+            }
+
+            // Changer de joueur
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            updatePlayerDisplay();
+        }
+
+        function checkWinner() {
+            return winningCombinations.some(combination => {
+                const [a, b, c] = combination;
+                return board[a] !== '' && 
+                       board[a] === board[b] && 
+                       board[a] === board[c];
+            });
+        }
+
+        function highlightWinningCombination() {
+            for (const combination of winningCombinations) {
+                const [a, b, c] = combination;
+                if (board[a] !== '' && 
+                    board[a] === board[b] && 
+                    board[a] === board[c]) {
+                    cells[a].classList.add('winning');
+                    cells[b].classList.add('winning');
+                    cells[c].classList.add('winning');
+                    break;
+                }
+            }
+        }
+
+        function updatePlayerDisplay() {
+            const playerSymbol = document.getElementById('playerSymbol');
+            playerSymbol.textContent = currentPlayer;
+            playerSymbol.className = currentPlayer === 'X' ? 'player-x' : 'player-o';
+        }
+
+        function updateScore() {
+            if (currentPlayer === 'X') {
+                scoreX++;
+                document.getElementById('scoreX').textContent = scoreX;
+            } else {
+                scoreO++;
+                document.getElementById('scoreO').textContent = scoreO;
+            }
+        }
+
+        function showModal(message) {
+            document.getElementById('modalMessage').textContent = message;
+            document.getElementById('modal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('show');
+        }
+
+        function resetGame() {
+            currentPlayer = 'X';
+            board = ['', '', '', '', '', '', '', '', ''];
+            gameActive = true;
+
+            cells.forEach(cell => {
+                cell.textContent = '';
+                cell.disabled = false;
+                cell.classList.remove('x', 'o', 'winning');
+            });
+
+            updatePlayerDisplay();
+        }
+
+        function resetScore() {
+            scoreX = 0;
+            scoreO = 0;
+            document.getElementById('scoreX').textContent = scoreX;
+            document.getElementById('scoreO').textContent = scoreO;
+            resetGame();
+        }
+
+        // Charger les scores depuis le localStorage si disponible
+        window.addEventListener('load', () => {
+            const savedScoreX = localStorage.getItem('morpion-scoreX');
+            const savedScoreO = localStorage.getItem('morpion-scoreO');
+            
+            if (savedScoreX !== null) {
+                scoreX = parseInt(savedScoreX, 10);
+                document.getElementById('scoreX').textContent = scoreX;
+            }
+            
+            if (savedScoreO !== null) {
+                scoreO = parseInt(savedScoreO, 10);
+                document.getElementById('scoreO').textContent = scoreO;
+            }
+        });
+
+        // Sauvegarder les scores dans le localStorage
+        window.addEventListener('beforeunload', () => {
+            localStorage.setItem('morpion-scoreX', scoreX);
+            localStorage.setItem('morpion-scoreO', scoreO);
+        });
+    </script>
+</body>
+</html>
