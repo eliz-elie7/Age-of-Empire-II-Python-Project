@@ -21,7 +21,7 @@ def find_free_port(start_port=8000, max_attempts=10):
     """Trouve un port libre pour le serveur HTTP"""
     for port in range(start_port, start_port + max_attempts):
         try:
-            with socketserver.TCPServer(("", port), None) as s:
+            with socketserver.TCPServer(("", port), None) as _:
                 return port
         except OSError:
             continue

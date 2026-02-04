@@ -442,12 +442,12 @@
             const savedScoreO = localStorage.getItem('morpion-scoreO');
             
             if (savedScoreX !== null) {
-                scoreX = parseInt(savedScoreX);
+                scoreX = parseInt(savedScoreX, 10);
                 document.getElementById('scoreX').textContent = scoreX;
             }
             
             if (savedScoreO !== null) {
-                scoreO = parseInt(savedScoreO);
+                scoreO = parseInt(savedScoreO, 10);
                 document.getElementById('scoreO').textContent = scoreO;
             }
         });
